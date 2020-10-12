@@ -1,5 +1,5 @@
-use crate::game_logic::{GameObject, Wall, GRID_HEIGHT, GRID_WIDTH};
-use crate::geometry::P;
+use crate::game_logic::{Baddie, GameObject, Wall, GRID_HEIGHT, GRID_WIDTH};
+use crate::geometry::{is_collision, P};
 use std::collections::HashMap;
 
 /// Bin size for spatial hashmap (square grid).
@@ -39,42 +39,63 @@ fn build_map(objects: &Vec<&GameObject>) -> (SpatialMap, SpatialIndex) {
     (object_map, object_index)
 }
 
+type CollisionHandler = dyn Fn(Wall, Baddie);
+
 /// Detects collisions and runs handlers as appropriate
 pub struct CollisionSystem {
-    bullet_map: SpatialMap,
-    bullet_index: SpatialIndex,
+    // bullet_map: SpatialMap,
+    // bullet_index: SpatialIndex,
     wall_map: SpatialMap,
     wall_index: SpatialIndex,
     baddie_map: SpatialMap,
     baddie_index: SpatialIndex,
+    handler: CollisionHandler,
 }
 
-// TODO: Implement
-// impl CollisionSystem {
-//     pub fn new(world: &World) -> Self {
-//         // build hashmaps from world
+impl CollisionSystem {
+    pub fn new(walls: &Vec<Wall>, baddies: &Vec<Baddie>, handler: CollisionHandler) -> Self {
+        // build hashmaps from world
 
-//         let bullet_map = 0;
-//         let bullet_index = 0;
-//         let wall_map = 0;
-//         let wall_index = 0;
-//         let baddie_map = 0;
-//         let baddie_index = 0;
+        // let bullet_map = 0;
+        // let bullet_index = 0;
+        let (wall_map, wall_index) = build_map(&walls.iter().map(|w| &w.0).collect());
+        let (baddie_map, baddie_index) = build_map(&baddies.iter().map(|w| &w.0).collect());
 
-//         Self {
-//             bullet_map,
-//             bullet_index,
-//             wall_map,
-//             wall_index,
-//             baddie_map,
-//             baddie_index,
-//         }
-//     }
+        Self {
+            // bullet_map,
+            // bullet_index,
+            wall_map,
+            wall_index,
+            baddie_map,
+            baddie_index,
+            handler,
+        }
+    }
 
-//     pub fn update(world: &mut World) {
-//         // update hashmaps and check collisions
-//     }
-// }
+    /// Check collisions and run appropriate handlers
+    pub fn process(&self)
+    {
+        let bin_count = 100; // TODO: Calculate
+        for i in 0..bin_count {
+            if let Some(walls) = &self.wall_map.get(&i) {
+                if let Some(baddies) = &self.baddie_map.get(&i) {
+                    for wall in *walls {
+                        for baddie in *baddies {
+                            if is_collision(wall.0.geometry, baddie.0.geometry)
+                            {
+                                &self.handler(wall, baddie);   
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // pub fn update(world: &mut World) {
+    //     // update hashmaps and check collisions
+    // }
+}
 
 #[cfg(test)]
 mod tests {
@@ -120,5 +141,23 @@ mod tests {
         assert_eq!(wall_index.get(&wall2_center), Some(&11));
     }
 
+    fn collision_static_simple() {
+        // Arrange - 2 walls, 2 baddies, 1 of each colliding, plus associated handler
+        let wall1_center = (1200, 1200);
+        let wall2_center = (1700, 1700);
+        let walls = vec![Wall::new(wall1_center), Wall::new(wall2_center)];
+        let baddie1_center = wall1_center; // => colliding
+        let baddie2_center = (0, 0); // => not colliding
+        let baddies = vec![
+            Baddie::new(baddie1_center, (0, 0), 0.0),
+            Baddie::new(baddie2_center, (0, 0), 0.0)];
+        let handler = |wall: Wall, baddie: Baddie| { assert!(wall.0.get_center() == wall1_center && baddie.0.get_center() == baddie1_center && !(baddie.0.get_center() == baddie2_center) )  };
+        let collision_system = CollisionSystem::new(&walls, &baddies, handler);
+        
+        // Act
+        collision_system.process();
 
+        // Assert - handler called with correct arguments
+
+    }
 }
