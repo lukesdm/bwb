@@ -1,4 +1,4 @@
-use crate::game_logic::{Wall, GRID_HEIGHT, GRID_WIDTH};
+use crate::game_logic::{GameObject, Wall, GRID_HEIGHT, GRID_WIDTH};
 use crate::geometry::P;
 use std::collections::HashMap;
 
@@ -15,21 +15,19 @@ fn grid_hash(center: P) -> i32 {
     bx + by * GRID_WIDTH as i32 / GRID_BIN_SIZE
 }
 
-//type SpatialMap = HashMap<u32, Vec<Wall>>;
 /// Just center points for now. TODO: Expand to polys
 type SpatialMap = HashMap<i32, Vec<P>>;
 
 /// Build map of bin -> object list
-fn build_map(walls: &Vec<Wall>) -> SpatialMap {
-    let mut wall_map = SpatialMap::new();
-    //let mut wall_map = [vec![]; 100];
-    for wall in walls {
-        wall_map
-            .entry(grid_hash(wall.get_center()))
-            .and_modify(|e| e.push(wall.get_center()))
-            .or_insert(vec![wall.get_center()]);
+fn build_map(objects: &Vec<&GameObject>) -> SpatialMap {
+    let mut object_map = SpatialMap::new();
+    for obj in objects {
+        object_map
+            .entry(grid_hash(obj.get_center()))
+            .and_modify(|e| e.push(obj.get_center()))
+            .or_insert(vec![obj.get_center()]);
     }
-    wall_map
+    object_map
 }
 
 // TODO: Implement type
@@ -83,7 +81,7 @@ mod tests {
         assert_eq!(21, actual);
     }
 
-    /// 2 walls in same bin
+    /// 2 walls in same bin - build map
     #[test]
     fn build_map_2walls_1bin() {
         // Arrange - 2 walls in bin 11
@@ -92,7 +90,8 @@ mod tests {
         let walls = vec![Wall::new(wall1_center), Wall::new(wall2_center)];
 
         // Act
-        let wall_map = build_map(&walls);
+        let objects: Vec<&GameObject> = walls.iter().map(|w| &w.0).collect();
+        let wall_map = build_map(&objects);
 
         // Assert
         assert_eq!(wall_map.get(&11), Some(&vec![wall1_center, wall2_center]));

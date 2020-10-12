@@ -98,6 +98,10 @@ impl GameObject {
             state,
         }
     }
+
+    pub fn get_center(&self) -> P {
+        self.state.center
+    }
 }
 
 pub struct Cannon(pub GameObject);
@@ -150,12 +154,13 @@ pub struct Wall(pub GameObject);
 impl Wall {
     pub fn new(center: P) -> Self {
         const WALL_SIZE: u32 = 200;
-        Self(GameObject::new(SqBox::new(center, WALL_SIZE, (0, 0), 0.0, 0.0)))
-    }
-
-    // TODO: Remove once collision system imrpoved.
-    pub fn get_center(&self) -> P {
-        self.0.state.center
+        Self(GameObject::new(SqBox::new(
+            center,
+            WALL_SIZE,
+            (0, 0),
+            0.0,
+            0.0,
+        )))
     }
 }
 
@@ -474,7 +479,7 @@ mod tests {
     #[test]
     fn baddies_bounce_off_walls() {
         let mut world = World::new(
-            Cannon::new((0, 0)),                              // don't care
+            Cannon::new((0, 0)),                             // don't care
             vec![Baddie::new((1000, 1000), (1000, 0), 0.0)], // assume size 750 => right edge is at x=1375
             vec![Wall::new((1900, 1000))],
         ); // assume size is 1000 => left edge is at 1400
@@ -497,7 +502,7 @@ mod tests {
     fn bullet_destroyed_by_wall() {
         // Arrange
         let mut world = World {
-            cannon: Cannon::new((0, 0)),                        // dummy - not used here
+            cannon: Cannon::new((0, 0)),                      // dummy - not used here
             bullets: vec![Bullet::new((1340, 1000), (1, 0))], // assume size is 100 => right edge is at 1390. Also, speed is 1000U/sec
             baddies: vec![],
             walls: vec![Wall::new((1900, 1000))], // assume size is 1000 => left edge is at 1400
