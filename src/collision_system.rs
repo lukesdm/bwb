@@ -15,23 +15,29 @@ fn grid_hash(center: P) -> i32 {
     bx + by * GRID_WIDTH as i32 / GRID_BIN_SIZE
 }
 
-/// Just center points for now. TODO: Expand to polys
+/// Just center points for now. TODO: Expand to handle polys + entity IDs
 type SpatialMap = HashMap<i32, Vec<P>>;
+type SpatialIndex = HashMap<P, i32>;
 
-/// Build map of bin -> object list
-fn build_map(objects: &Vec<&GameObject>) -> SpatialMap {
+/// Build map of bin -> object list, and associated index (currently using center point, as a rough way to ID an object)
+fn build_map(objects: &Vec<&GameObject>) -> (SpatialMap, SpatialIndex) {
     let mut object_map = SpatialMap::new();
+    let mut object_index = SpatialIndex::new();
     for obj in objects {
+        let grid_bin = grid_hash(obj.get_center());
         object_map
-            .entry(grid_hash(obj.get_center()))
+            .entry(grid_bin)
             .and_modify(|e| e.push(obj.get_center()))
             .or_insert(vec![obj.get_center()]);
-    }
-    object_map
-}
 
-// TODO: Implement type
-type SpatialIndex = i32;
+        let existing = object_index.insert(obj.get_center(), grid_bin);
+        // theoretical problem to watch out for (but not yet a real concern)
+        if let Some(p_existing) = existing {
+            println!("Duplicate object detected with center:  {}", p_existing);
+        }
+    }
+    (object_map, object_index)
+}
 
 /// Detects collisions and runs handlers as appropriate
 pub struct CollisionSystem {
@@ -91,9 +97,28 @@ mod tests {
 
         // Act
         let objects: Vec<&GameObject> = walls.iter().map(|w| &w.0).collect();
-        let wall_map = build_map(&objects);
+        let (wall_map, _) = build_map(&objects);
 
         // Assert
         assert_eq!(wall_map.get(&11), Some(&vec![wall1_center, wall2_center]));
     }
+
+    /// 2 walls in same bin - index
+    #[test]
+    fn build_map_index_2walls_1bin() {
+        // Arrange - 2 walls in bin 11
+        let wall1_center = (1200, 1200);
+        let wall2_center = (1700, 1700);
+        let walls = vec![Wall::new(wall1_center), Wall::new(wall2_center)];
+
+        // Act
+        let objects: Vec<&GameObject> = walls.iter().map(|w| &w.0).collect();
+        let (_, wall_index) = build_map(&objects);
+
+        // Assert
+        assert_eq!(wall_index.get(&wall1_center), Some(&11));
+        assert_eq!(wall_index.get(&wall2_center), Some(&11));
+    }
+
+
 }
