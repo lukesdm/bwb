@@ -152,6 +152,11 @@ impl Wall {
         const WALL_SIZE: u32 = 200;
         Self(GameObject::new(SqBox::new(center, WALL_SIZE, (0, 0), 0.0, 0.0)))
     }
+
+    // TODO: Remove once collision system imrpoved.
+    pub fn get_center(&self) -> P {
+        self.0.state.center
+    }
 }
 
 // TODO: Refactor accessibility

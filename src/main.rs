@@ -23,6 +23,8 @@ use geometry::*;
 mod game_logic;
 use game_logic::*;
 
+mod collision_system;
+
 // Screen coordinate bounds
 const WIN_WIDTH: u32 = 600;
 const WIN_HEIGHT: u32 = 600;
