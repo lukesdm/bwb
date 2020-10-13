@@ -85,7 +85,18 @@ fn direction_vector(direction: Direction) -> Vector {
     }
 }
 
+#[derive(Hash, Eq, PartialEq, Copy, Clone)]
+pub struct EntityId(u32);
+
+static mut id_counter: u32 = 0;
+
+fn generate_id() -> EntityId {
+    id_counter += 1;
+    EntityId(id_counter)
+}
+
 pub struct GameObject {
+    id: EntityId,
     // COULDDO: these things shouldn't live together (separation of concerns/data-oriented design)
     state: SqBox,
     pub geometry: Geometry,
@@ -94,6 +105,7 @@ pub struct GameObject {
 impl GameObject {
     fn new(state: SqBox) -> GameObject {
         GameObject {
+            id: generate_id(),
             geometry: build_box_geometry(&state),
             state,
         }
@@ -101,6 +113,10 @@ impl GameObject {
 
     pub fn get_center(&self) -> P {
         self.state.center
+    }
+
+    pub fn get_id(&self) -> EntityId {
+        self.id
     }
 }
 
