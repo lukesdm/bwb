@@ -6,6 +6,20 @@ use std::collections::HashMap;
 /// 10000 / 1000 => 10 * 10 grid
 const GRID_BIN_SIZE: i32 = 1000;
 
+// TODO: Get rid of this once per-vertex hashing is implemented.
+fn get_center(geom: &Geometry) -> P {
+    let mut cx = 0;
+    let mut cy = 0;
+    // Average 4 corner vertices, ignoring 5th (duplicate)
+    for p in geom.iter().take(4) {
+        let (x, y) = p;
+        cx += x;
+        cy += y;
+    }
+
+    (cx / 4, cy / 4)
+}
+
 /// Spatial hash. For now, just use a center point. TODO: use box/circle geometry
 fn grid_hash(center: P) -> i32 {
     assert!(GRID_WIDTH == GRID_HEIGHT);
@@ -16,25 +30,26 @@ fn grid_hash(center: P) -> i32 {
 }
 
 /// Just center points for now. TODO: Expand to handle polys + entity IDs
+type ObjectGeometries = HashMap<EntityId, Geometry>;
 type SpatialMap = HashMap<i32, Vec<EntityId>>;
 type SpatialIndex = HashMap<EntityId, i32>;
 
 /// Build map of bin -> object list, and associated index (currently using center point, as a rough way to ID an object)
 //fn build_map(objects: &Vec<CollisionData>) -> (SpatialMap, SpatialIndex) {
-fn build_map(objects: &Vec<&GameObject>) -> (SpatialMap, SpatialIndex) {
+fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
     let mut object_map = SpatialMap::new();
     let mut object_index = SpatialIndex::new();
-    for obj in objects {
+    for geometry in geometries {
         //let (id, center, _) = *obj;
-        let center = obj.get_center();
-        let id = obj.get_id();
-        let grid_bin = grid_hash(center);
+        let (id, vertices) = geometry;
+        let center = get_center(vertices);
+        let grid_bin = grid_hash(center); // TODO: use all geometry
         object_map
             .entry(grid_bin)
-            .and_modify(|e| e.push(id))
-            .or_insert(vec![id]);
+            .and_modify(|e| e.push(*id))
+            .or_insert(vec![*id]);
 
-        let existing = object_index.insert(id, grid_bin);
+        let existing = object_index.insert(*id, grid_bin);
         // theoretical problem to watch out for (but not yet a real concern)
         if let Some(p_existing) = existing {
             println!("Duplicate object detected with id:  {}", p_existing);
@@ -53,7 +68,7 @@ type CenterPoint = P;
 //type CollisionHandler = Fn(Wall, Baddie) -> ();
 
 /// Detects collisions and runs handlers as appropriate
-pub struct CollisionSystem<'a, THandler>
+pub struct CollisionSystem<THandler>
 where
     THandler: Fn(EntityId, EntityId) -> (),
 {
@@ -65,21 +80,19 @@ where
     baddie_map: SpatialMap,
     baddie_index: SpatialIndex,
     handler: THandler,
-    walls: &'a Vec<&'a GameObject>,
-    baddies: &'a Vec<&'a GameObject>,
     //walls: &'a Vec<CollisionData>,
     //baddies: &'a Vec<CollisionData>,
 }
 
-impl<'a, THandler> CollisionSystem<'a, THandler>
+impl<THandler> CollisionSystem<THandler>
 where
     THandler: Fn(EntityId, EntityId) -> (),
 {
     //where THandler: Fn(Wall, Baddie) -> () {
     //pub fn new(walls: &'a Vec<CollisionData>, baddies: &'a Vec<CollisionData>, handler: THandler) -> Self {
     pub fn new(
-        walls: &'a Vec<&GameObject>,
-        baddies: &'a Vec<&GameObject>,
+        walls: &ObjectGeometries,
+        baddies: &ObjectGeometries,
         handler: THandler,
     ) -> Self {
         // build hashmaps from world
@@ -97,31 +110,21 @@ where
             baddie_map,
             baddie_index,
             handler,
-            walls,
-            baddies,
         }
-    }
-
-    fn get_wall(&self, id: EntityId) -> &GameObject {
-        self.walls.iter().find(|w| w.get_id() == id).unwrap()
-    }
-
-    fn get_baddie(&self, id: EntityId) -> &GameObject {
-        self.baddies.iter().find(|b| b.get_id() == id).unwrap()
     }
 
     /// Check collisions and run appropriate handlers
     // TODO: Handle geometry spanning multiple bins
-    pub fn process(&self) {
+    pub fn process(&self, walls: &ObjectGeometries, baddies: &ObjectGeometries) {
         let bin_count = 100; // TODO: Calculate
         for i in 0..bin_count {
             if let Some(wall_ids) = self.wall_map.get(&i) {
                 if let Some(baddie_ids) = self.baddie_map.get(&i) {
                     for wall_id in wall_ids {
-                        let wall = self.get_wall(*wall_id);
                         for baddie_id in baddie_ids {
-                            let baddie = self.get_baddie(*baddie_id);
-                            if is_collision(&wall.geometry, &baddie.geometry) {
+                            let wall_geom = walls.get(wall_id).unwrap();
+                            let baddie_geom = baddies.get(baddie_id).unwrap();
+                            if is_collision(wall_geom, baddie_geom) {
                                 (self.handler)(*wall_id, *baddie_id);
                             }
                         }
@@ -152,22 +155,24 @@ mod tests {
     fn build_map_2walls_1bin() {
         // Arrange - 2 walls in bin 11
         let bin_expected = 11;
-        let wall1_center = (1200, 1200);
-        let wall2_center = (1700, 1700);
-        let walls = vec![Wall::new(wall1_center), Wall::new(wall2_center)];
+        //let wall1_center = (1200, 1200);
+        //let wall2_center = (1700, 1700);
+        //let walls = vec![Wall::new(wall1_center), Wall::new(wall2_center)];
+        let wall1 = Wall::new((1200, 1200));
+        let wall2 = Wall::new((1700, 1700));
+        let walls_geoms: ObjectGeometries = [ (wall1.0.get_id(), wall1.0.geometry), (wall2.0.get_id(), wall2.0.geometry)  ].iter().cloned().collect();
 
-        // Act
-        let objects: Vec<&GameObject> = walls.iter().map(|w| &w.0).collect();
-        let (wall_map, wall_index) = build_map(&objects);
+        // Act        
+        let (wall_map, wall_index) = build_map(&walls_geoms);
 
         // Assert - map
         assert_eq!(
             wall_map.get(&bin_expected),
-            Some(&vec![walls[0].0.get_id(), walls[1].0.get_id()])
+            Some(&vec![wall2.0.get_id(), wall1.0.get_id()]) // Order here is an implementation detail. COULDDO: make order-independent comparison
         );
         // Assert - index
-        assert_eq!(wall_index.get(&walls[0].0.get_id()), Some(&bin_expected));
-        assert_eq!(wall_index.get(&walls[1].0.get_id()), Some(&bin_expected));
+        assert_eq!(wall_index.get(&wall1.0.get_id()), Some(&bin_expected));
+        assert_eq!(wall_index.get(&wall2.0.get_id()), Some(&bin_expected));
     }
 
     #[test]
@@ -177,14 +182,14 @@ mod tests {
         let wall1_id = wall1.0.get_id();
         let wall2 = Wall::new((1700, 1700));
         let wall2_id = wall2.0.get_id();
-        let walls = vec![wall1, wall2];
-        let walls: Vec<&GameObject> = walls.iter().map(|w| &w.0).collect();
+        let walls_geoms: ObjectGeometries = [ (wall1.0.get_id(), wall1.0.geometry), (wall2.0.get_id(), wall2.0.geometry)  ].iter().cloned().collect();
+        
         let baddie1 = Baddie::new((1200, 1200), (0, 0), 0.0); // => colliding
         let baddie1_id = baddie1.0.get_id();
         let baddie2 = Baddie::new((0, 0), (0, 0), 0.0); // => not colliding
         let baddie2_id = baddie2.0.get_id();
-        let baddies = vec![baddie1, baddie2];
-        let baddies: Vec<&GameObject> = baddies.iter().map(|b| &b.0).collect();
+        let baddies_geoms: ObjectGeometries = [ (baddie1.0.get_id(), baddie1.0.geometry), (baddie2.0.get_id(), baddie2.0.geometry)  ].iter().cloned().collect();
+        
         let handler = |wall_id: EntityId, baddie_id: EntityId| {
             // Assert - handler called with correct arguments
             assert!(
@@ -200,9 +205,10 @@ mod tests {
         //             && !(baddie_id == baddie2.0.get_id())
         //     )
         // };
-        let collision_system = CollisionSystem::new(&walls, &baddies, handler);
+        let collision_system = CollisionSystem::new(&walls_geoms, &baddies_geoms, handler);
+        
         // Act
-        collision_system.process();
+        collision_system.process(&walls_geoms, &baddies_geoms);
 
         // Assert - see handler, above
     }
