@@ -85,14 +85,19 @@ fn direction_vector(direction: Direction) -> Vector {
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Copy, Clone)]
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct EntityId(u32);
 
 static mut id_counter: u32 = 0;
 
 fn generate_id() -> EntityId {
-    id_counter += 1;
-    EntityId(id_counter)
+    let mut id = 0;
+    // TODO: find a better way to do this - either inject, or use a mutex
+    unsafe {
+        id_counter += 1;
+        id = id_counter;
+    }
+    EntityId(id)
 }
 
 pub struct GameObject {
