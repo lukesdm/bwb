@@ -88,14 +88,15 @@ fn direction_vector(direction: Direction) -> Vector {
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct EntityId(u32);
 
-static mut id_counter: u32 = 0;
+static mut ID_COUNTER: u32 = 0;
 
 fn generate_id() -> EntityId {
+    #![allow(unused)] // due to unsafe
     let mut id = 0;
-    // TODO: find a better way to do this - either inject, or use a mutex
+    // Not thread safe TODO: consider a better way to do this e.g. inject, or use a mutex
     unsafe {
-        id_counter += 1;
-        id = id_counter;
+        ID_COUNTER += 1;
+        id = ID_COUNTER;
     }
     EntityId(id)
 }

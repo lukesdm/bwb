@@ -111,6 +111,7 @@ where
     }
 
     /// Check collisions and run appropriate handlers
+    // TODO: Handle geometry spanning multiple bins
     pub fn process(&self) {
         let bin_count = 100; // TODO: Calculate
         for i in 0..bin_count {
@@ -146,40 +147,27 @@ mod tests {
         assert_eq!(21, actual);
     }
 
-    /// 2 walls in same bin - build map
+    /// 2 walls in same bin - build map and index
     #[test]
     fn build_map_2walls_1bin() {
         // Arrange - 2 walls in bin 11
+        let bin_expected = 11;
         let wall1_center = (1200, 1200);
         let wall2_center = (1700, 1700);
         let walls = vec![Wall::new(wall1_center), Wall::new(wall2_center)];
 
         // Act
         let objects: Vec<&GameObject> = walls.iter().map(|w| &w.0).collect();
-        let (wall_map, _) = build_map(&objects);
+        let (wall_map, wall_index) = build_map(&objects);
 
-        // Assert
+        // Assert - map
         assert_eq!(
-            wall_map.get(&11),
+            wall_map.get(&bin_expected),
             Some(&vec![walls[0].0.get_id(), walls[1].0.get_id()])
         );
-    }
-
-    /// 2 walls in same bin - index
-    #[test]
-    fn build_map_index_2walls_1bin() {
-        // Arrange - 2 walls in bin 11
-        let wall1_center = (1200, 1200);
-        let wall2_center = (1700, 1700);
-        let walls = vec![Wall::new(wall1_center), Wall::new(wall2_center)];
-
-        // Act
-        let objects: Vec<&GameObject> = walls.iter().map(|w| &w.0).collect();
-        let (_, wall_index) = build_map(&objects);
-
-        // Assert
-        assert_eq!(wall_index.get(&walls[0].0.get_id()), Some(&11));
-        assert_eq!(wall_index.get(&walls[1].0.get_id()), Some(&11));
+        // Assert - index
+        assert_eq!(wall_index.get(&walls[0].0.get_id()), Some(&bin_expected));
+        assert_eq!(wall_index.get(&walls[1].0.get_id()), Some(&bin_expected));
     }
 
     #[test]
@@ -197,9 +185,12 @@ mod tests {
         let baddie2_id = baddie2.0.get_id();
         let baddies = vec![baddie1, baddie2];
         let baddies: Vec<&GameObject> = baddies.iter().map(|b| &b.0).collect();
-        //let handler = |wall: Wall, baddie: Baddie| { assert!(wall.0.get_center() == wall1_center && baddie.0.get_center() == baddie1_center && !(baddie.0.get_center() == baddie2_center) )  };
         let handler = |wall_id: EntityId, baddie_id: EntityId| {
-            assert!(wall_id == wall1_id && baddie_id == baddie1_id && !(baddie_id == baddie2_id))
+            // Assert - handler called with correct arguments
+            assert!(
+                (wall_id == wall1_id && baddie_id == baddie1_id)
+                    && !(baddie_id == baddie2_id || wall_id == wall2_id)
+            )
         };
         // TODO: Figure out how to get stuff into closure
         // let handler = |wall_id: EntityId, baddie_id: EntityId| {
@@ -213,6 +204,6 @@ mod tests {
         // Act
         collision_system.process();
 
-        // Assert - handler called with correct arguments
+        // Assert - see handler, above
     }
 }
