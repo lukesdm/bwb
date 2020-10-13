@@ -159,7 +159,10 @@ mod tests {
         let (wall_map, _) = build_map(&objects);
 
         // Assert
-        assert_eq!(wall_map.get(&11), Some(&vec![wall1_center, wall2_center]));
+        assert_eq!(
+            wall_map.get(&11),
+            Some(&vec![walls[0].0.get_id(), walls[1].0.get_id()])
+        );
     }
 
     /// 2 walls in same bin - index
@@ -179,24 +182,33 @@ mod tests {
         assert_eq!(wall_index.get(&walls[1].0.get_id()), Some(&11));
     }
 
+    #[test]
     fn collision_static_simple() {
         // Arrange - 2 walls, 2 baddies, 1 of each colliding, plus associated handler
         let wall1 = Wall::new((1200, 1200));
+        let wall1_id = wall1.0.get_id();
         let wall2 = Wall::new((1700, 1700));
+        let wall2_id = wall2.0.get_id();
         let walls = vec![wall1, wall2];
         let walls: Vec<&GameObject> = walls.iter().map(|w| &w.0).collect();
         let baddie1 = Baddie::new((1200, 1200), (0, 0), 0.0); // => colliding
+        let baddie1_id = baddie1.0.get_id();
         let baddie2 = Baddie::new((0, 0), (0, 0), 0.0); // => not colliding
+        let baddie2_id = baddie2.0.get_id();
         let baddies = vec![baddie1, baddie2];
         let baddies: Vec<&GameObject> = baddies.iter().map(|b| &b.0).collect();
         //let handler = |wall: Wall, baddie: Baddie| { assert!(wall.0.get_center() == wall1_center && baddie.0.get_center() == baddie1_center && !(baddie.0.get_center() == baddie2_center) )  };
         let handler = |wall_id: EntityId, baddie_id: EntityId| {
-            assert!(
-                wall_id == wall1.0.get_id()
-                    && baddie_id == baddie1.0.get_id()
-                    && !(baddie_id == baddie2.0.get_id())
-            )
+            assert!(wall_id == wall1_id && baddie_id == baddie1_id && !(baddie_id == baddie2_id))
         };
+        // TODO: Figure out how to get stuff into closure
+        // let handler = |wall_id: EntityId, baddie_id: EntityId| {
+        //     assert!(
+        //         wall_id == wall1.0.get_id()
+        //             && baddie_id == baddie1.0.get_id()
+        //             && !(baddie_id == baddie2.0.get_id())
+        //     )
+        // };
         let collision_system = CollisionSystem::new(&walls, &baddies, handler);
         // Act
         collision_system.process();
