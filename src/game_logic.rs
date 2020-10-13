@@ -135,7 +135,7 @@ impl Bullet {
 pub struct Baddie(pub GameObject);
 impl Baddie {
     pub fn new(start: P, vel: Vector, rotation_speed: f32) -> Self {
-        const BADDIE_SIZE: u32 = 160;
+        const BADDIE_SIZE: u32 = 750;
         Self(GameObject::new(SqBox::new(
             start,
             BADDIE_SIZE,
@@ -149,7 +149,7 @@ impl Baddie {
 pub struct Wall(pub GameObject);
 impl Wall {
     pub fn new(center: P) -> Self {
-        const WALL_SIZE: u32 = 200;
+        const WALL_SIZE: u32 = 1000;
         Self(GameObject::new(SqBox::new(center, WALL_SIZE, (0, 0), 0.0, 0.0)))
     }
 }
