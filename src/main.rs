@@ -27,7 +27,7 @@ mod world;
 
 mod game_logic;
 use game_logic::*;
-use crate::world::{World, ObjectGeometries, GameObject, make_cannon, make_wall, make_baddie};
+use crate::world::{World, ObjectGeometries, Entities, Shapes, GameObject, make_cannon, make_wall, make_baddie};
 use crate::entity::{EntityId, EntityKind};
 use std::collections::HashMap;
 
@@ -50,7 +50,7 @@ fn world_to_screen(coords: &(i32, i32)) -> (i32, i32) {
     (sx as i32, sy as i32)
 }
 
-fn render_box(canvas: &mut render::WindowCanvas, box_geometry: &[Vertex], color: &Color) {
+fn render_box(canvas: &mut render::WindowCanvas, box_geometry: &[Vertex], color: Color) {
     // COULDDO: Way to avoid reallocating here? (E.g. re-use existing render vec)
     let points: Vec<Point> = box_geometry
         .iter()
@@ -63,19 +63,19 @@ fn render_box(canvas: &mut render::WindowCanvas, box_geometry: &[Vertex], color:
     canvas.draw_lines(&points[..]).unwrap();
 }
 
-fn render(canvas: &mut render::WindowCanvas, entities: &Entities, geometries: &Geometries) {
+fn render(canvas: &mut render::WindowCanvas, entities: &Entities, geometries: &ObjectGeometries) {
     let colors: HashMap<EntityKind, Color> = [
         (EntityKind::Bullet, Color::RGB(74, 143, 255)),
         (EntityKind::Wall, Color::RGB(232, 225, 81)),
         (EntityKind::Baddie, Color::RGB(235, 33, 35)),
         (EntityKind::Cannon, Color::RGB(69, 247, 105)),
-    ].into_iter().collect();
+    ].into_iter().cloned().collect();
     for entity in entities {
-        render_box(canvas, geometries.get(entity.id).unwrap(), colors.get(entity.kind).unwrap());
+        render_box(canvas, geometries.get(&entity.get_id()).unwrap(), *colors.get(entity.get_kind()).unwrap());
     }
 }
 
-fn engine_run(&mut world: World) {
+fn engine_run(world: &mut World) {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
@@ -200,5 +200,5 @@ fn init_level0() -> World {
 
 pub fn main() {
     let mut world = init_level();
-    engine_run(world);
+    engine_run(&mut world);
 }

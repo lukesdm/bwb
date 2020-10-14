@@ -16,7 +16,7 @@ fn generate_id() -> EntityId {
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct EntityId(u32);
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Hash, Eq)]
 pub enum EntityKind {
     Baddie,
     Wall,

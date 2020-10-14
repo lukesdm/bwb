@@ -71,7 +71,7 @@ type CenterPoint = P;
 /// Detects collisions and runs handlers as appropriate
 pub struct CollisionSystem<THandler>
 where
-    THandler: Fn(EntityId, EntityId) -> (),
+    THandler: FnMut(EntityId, EntityId) -> (),
 {
     //where THandler: Fn(Wall, Baddie) -> () {
     // bullet_map: SpatialMap,
@@ -87,7 +87,7 @@ where
 
 impl<THandler> CollisionSystem<THandler>
 where
-    THandler: Fn(EntityId, EntityId) -> (),
+    THandler: FnMut(EntityId, EntityId) -> (),
 {
     //where THandler: Fn(Wall, Baddie) -> () {
     //pub fn new(walls: &'a Vec<CollisionData>, baddies: &'a Vec<CollisionData>, handler: THandler) -> Self {
@@ -157,9 +157,9 @@ mod tests {
     fn build_map_2walls_1bin() {
         // Arrange - 2 walls in bin 11
         let bin_expected = 11;
-        let (wall1_id, _, wall1_geom) = make_wall((1200, 1200));
-        let (wall2_id, _ , wall2_geom) = make_wall((1700, 1700));
-        let walls_geoms: ObjectGeometries = [ (wall1_id, wall1_geom), (wall2_id, wall2_geom)  ].iter().cloned().collect();
+        let (wall1, _, wall1_geom) = make_wall((1200, 1200));
+        let (wall2, _ , wall2_geom) = make_wall((1700, 1700));
+        let walls_geoms: ObjectGeometries = [ (wall1.get_id(), wall1_geom), (wall2.get_id(), wall2_geom)  ].iter().cloned().collect();
 
         // Act        
         let (wall_map, wall_index) = build_map(&walls_geoms);
@@ -167,31 +167,31 @@ mod tests {
         // Assert - map
         assert_eq!(
             wall_map.get(&bin_expected),
-            Some(&vec![wall2.0.get_id(), wall1.0.get_id()]) // Order here is an implementation detail. COULDDO: make order-independent comparison
+            Some(&vec![wall2.get_id(), wall1.get_id()]) // Order here is an implementation detail. COULDDO: make order-independent comparison
         );
         // Assert - index
-        assert_eq!(wall_index.get(&wall1.0.get_id()), Some(&bin_expected));
-        assert_eq!(wall_index.get(&wall2.0.get_id()), Some(&bin_expected));
+        assert_eq!(wall_index.get(&wall1.get_id()), Some(&bin_expected));
+        assert_eq!(wall_index.get(&wall2.get_id()), Some(&bin_expected));
     }
 
     #[test]
     fn collision_static_simple() {
         // Arrange - 2 walls, 2 baddies, 1 of each colliding, plus associated handler
-        let (wall1_id, _, wall1_geom) = make_wall((1200, 1200));
-        let (wall2_id, _, wall2_geom) = make_wall((1700, 1700));
-        let walls_geoms: ObjectGeometries = [ (wall1_id, wall1_geom), (wall2_id, wall2_geometry) ].iter().cloned().collect();
+        let (wall1, _, wall1_geom) = make_wall((1200, 1200));
+        let (wall2, _, wall2_geom) = make_wall((1700, 1700));
+        let walls_geoms: ObjectGeometries = [ (wall1.get_id(), wall1_geom), (wall2.get_id(), wall2_geom) ].iter().cloned().collect();
 
         // colliding baddie:
-        let (baddie1_id, baddie1_geom) = make_baddie((1200, 1200), (0, 0), 0.0);
+        let (baddie1, _, baddie1_geom) = make_baddie((1200, 1200), (0, 0), 0.0);
         // not colliding baddie:
-        let (baddie2_id, baddie2_geom) = make_baddie((0, 0), (0, 0), 0.0);
-        let baddies_geoms: ObjectGeometries = [ (baddie1.0.get_id(), baddie1.0.geometry), (baddie2.0.get_id(), baddie2.0.geometry) ].iter().cloned().collect();
+        let (baddie2, _, baddie2_geom) = make_baddie((0, 0), (0, 0), 0.0);
+        let baddies_geoms: ObjectGeometries = [ (baddie1.get_id(), baddie1_geom), (baddie2.get_id(), baddie2_geom) ].iter().cloned().collect();
         
         let handler = |wall_id: EntityId, baddie_id: EntityId| {
             // Assert - handler called with correct arguments
             assert!(
-                (wall_id == wall1_id && baddie_id == baddie1_id)
-                    && !(baddie_id == baddie2_id || wall_id == wall2_id)
+                (wall_id == wall1.get_id() && baddie_id == baddie1.get_id())
+                    && !(baddie_id == baddie2.get_id() || wall_id == wall2.get_id())
             )
         };
         // TODO: Figure out how to get stuff into closure
@@ -214,10 +214,11 @@ mod tests {
     fn collision_reverse_baddie() {
         // Arrange - 2 walls, 2 baddies, 1 of each colliding, plus associated handler
         //let wall = make_wall((1200, 1200));
-        let (wall_id, _, wall_geom) = make_wall((1200, 1200));
-        let walls_geoms: ObjectGeometries = [ (wall_id, wall_geom) ].iter().cloned().collect();
+        let (wall, _, wall_geom) = make_wall((1200, 1200));
+        let walls_geoms: ObjectGeometries = [ (wall.get_id(), wall_geom) ].iter().cloned().collect();
         // colliding baddie:
         let mut baddie = make_baddie((1200, 1200), (0, 0), 0.0);
+        let baddies_geoms: ObjectGeometries = [ (baddie.0.get_id(), baddie.2) ].iter().cloned().collect();
 
         let handler = |wall_id: EntityId, baddie_id: EntityId| {
             baddie.1.reverse();
@@ -230,8 +231,8 @@ mod tests {
         //             && !(baddie_id == baddie2.0.get_id())
         //     )
         // };
-        let collision_system = CollisionSystem::new(&walls, &baddies, handler);
+        let collision_system = CollisionSystem::new(&walls_geoms, &baddies_geoms, handler);
         // Act
-        collision_system.process(wall_geoms, baddie_geoms);
+        collision_system.process(&walls_geoms, &baddies_geoms);
     }
 }
