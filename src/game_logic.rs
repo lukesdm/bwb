@@ -12,47 +12,16 @@
 use crate::geometry::{is_collision, rotate, scale, Geometry, Vector, Vertex, P};
 use std::f32::consts::PI;
 use std::time::{Duration, Instant};
+use crate::shape::Shape;
 
 // World coordinate bounds
 pub const GRID_WIDTH: u32 = 10000;
 pub const GRID_HEIGHT: u32 = 10000;
 
-struct SqBox {
-    center: (i32, i32),
-    size: u32,
-    /// Velocity, in units per second
-    vel: (i32, i32),
-    /// Current rotation about centre, in radians
-    rotation: f32,
-    /// Rotational speed, in radians/sec
-    angular_velocity: f32,
-}
 
-impl SqBox {
-    pub fn new(
-        center: (i32, i32),
-        size: u32,
-        vel: (i32, i32),
-        rotation: f32,
-        angular_velocity: f32,
-    ) -> Self {
-        assert!(size > 0);
-        Self {
-            center,
-            size,
-            vel,
-            rotation,
-            angular_velocity,
-        }
-    }
-
-    pub fn set_center(&mut self, new_center: (i32, i32)) {
-        self.center = new_center;
-    }
-}
 
 /// Updates box geometry according to its state
-fn update_geometry(box_geometry: &mut [Vertex], box_state: &SqBox) {
+fn update_geometry(box_geometry: &mut [Vertex], box_state: &Shape) {
     let (cx, cy) = box_state.center;
     let delta = (box_state.size / 2) as i32;
     let vs = box_geometry;
@@ -69,13 +38,6 @@ fn update_geometry(box_geometry: &mut [Vertex], box_state: &SqBox) {
     }
 }
 
-/// Builds the box geometry, given its initial state
-fn build_box_geometry(box_state: &SqBox) -> [Vertex; 5] {
-    let mut vertices = [(0, 0); 5];
-    update_geometry(&mut vertices, box_state);
-    vertices
-}
-
 fn direction_vector(direction: Direction) -> Vector {
     match direction {
         Direction::Up => (0, -1),
@@ -85,126 +47,9 @@ fn direction_vector(direction: Direction) -> Vector {
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub struct EntityId(u32);
-
-static mut ID_COUNTER: u32 = 0;
-
-fn generate_id() -> EntityId {
-    #![allow(unused)] // due to unsafe
-    let mut id = 0;
-    // Not thread safe TODO: consider a better way to do this e.g. inject, or use a mutex
-    unsafe {
-        ID_COUNTER += 1;
-        id = ID_COUNTER;
-    }
-    EntityId(id)
-}
-
-pub struct GameObject {
-    id: EntityId,
-    // COULDDO: these things shouldn't live together (separation of concerns/data-oriented design)
-    state: SqBox,
-    pub geometry: Geometry,
-}
-
-impl GameObject {
-    fn new(state: SqBox) -> GameObject {
-        GameObject {
-            id: generate_id(),
-            geometry: build_box_geometry(&state),
-            state,
-        }
-    }
-
-    pub fn get_center(&self) -> P {
-        self.state.center
-    }
-
-    pub fn get_id(&self) -> EntityId {
-        self.id
-    }
-}
-
-pub struct Cannon(pub GameObject);
-impl Cannon {
-    pub fn new(center: P) -> Self {
-        const CANON_SIZE: u32 = 50;
-        Self(GameObject::new(SqBox::new(
-            center,
-            CANON_SIZE,
-            (0, 0),
-            PI / 4.0,
-            0.0,
-        )))
-    }
-
-    pub fn moove(&mut self, direction: Direction) {
-        self.0.state.vel = scale(direction_vector(direction), 1000); // COULDDO: const/parameterise
-    }
-}
-
-pub struct Bullet(pub GameObject);
-impl Bullet {
-    /// Creates a bullet with a preset speed. Expects `direction` to be a unit vector
-    pub fn new(start: P, direction: Vector) -> Self {
-        Self(GameObject::new(SqBox::new(
-            start,
-            100,
-            scale(direction, 1000),
-            0.0,
-            0.0,
-        )))
-    }
-}
-
-pub struct Baddie(pub GameObject);
-impl Baddie {
-    pub fn new(start: P, vel: Vector, rotation_speed: f32) -> Self {
-        const BADDIE_SIZE: u32 = 160;
-        Self(GameObject::new(SqBox::new(
-            start,
-            BADDIE_SIZE,
-            vel,
-            0.0,
-            rotation_speed,
-        )))
-    }
-}
-
-pub struct Wall(pub GameObject);
-impl Wall {
-    pub fn new(center: P) -> Self {
-        const WALL_SIZE: u32 = 200;
-        Self(GameObject::new(SqBox::new(
-            center,
-            WALL_SIZE,
-            (0, 0),
-            0.0,
-            0.0,
-        )))
-    }
-}
-
-// TODO: Refactor accessibility
-pub struct World {
-    pub cannon: Cannon,
-
-    // Vecs should be fine here, as long as they're initialized with enough capacity to prevent ad-hoc allocations
-    pub bullets: Vec<Bullet>,
-    pub baddies: Vec<Baddie>,
-    pub walls: Vec<Wall>,
-}
-
-impl World {
-    pub fn new(cannon: Cannon, baddies: Vec<Baddie>, walls: Vec<Wall>) -> Self {
-        World {
-            cannon,
-            bullets: Vec::with_capacity(10),
-            baddies: baddies,
-            walls: walls,
-        }
-    }
+// TODO: refactor - find a better place for this
+pub fn move_shape(shape: &mut Shape, direction: Direction) {
+    shape.vel = scale(direction_vector(direction), 1000); // COULDDO: const/parameterise
 }
 
 pub enum Direction {
@@ -220,25 +65,19 @@ pub enum Direction {
 pub fn try_fire(
     now: Instant,
     prev: Instant,
-    cannon: &Cannon,
-    bullets: &mut Vec<Bullet>,
+    cannon_pos: &P,
+    world: &mut World,
     direction: Direction,
 ) -> Instant {
     // 1 / rate of fire
     const RELOAD_TIME: Duration = Duration::from_millis(1000);
 
     if now > prev + RELOAD_TIME {
-        fire(cannon, bullets, direction);
+        world.add(make_bullet(cannon_pos, direction_vector(direction)));
+        //fire(cannon, bullets, direction);
         return now;
     }
     return prev;
-}
-
-fn fire(cannon: &Cannon, bullets: &mut Vec<Bullet>, direction: Direction) {
-    bullets.push(Bullet::new(
-        cannon.0.state.center,
-        direction_vector(direction),
-    ));
 }
 
 fn move_with_wrap(start: i32, amt: i32, bound: i32) -> i32 {
@@ -254,7 +93,7 @@ fn move_with_wrap(start: i32, amt: i32, bound: i32) -> i32 {
 
 /// Calculate new box spatial state
 /// `dt`: frame time, in ms
-fn update_pos(box_state: &mut SqBox, dt: i32, wrap: bool) {
+fn update_pos(box_state: &mut Shape, dt: i32, wrap: bool) {
     let (cx, cy) = box_state.center;
     let (vx, vy) = box_state.vel;
 
@@ -396,19 +235,19 @@ pub fn update_world(game_objects: &mut World, dt: i32) {
 
 #[cfg(test)]
 mod tests {
-    use super::{update_world, Baddie, Bullet, Cannon, GameObject, SqBox, Wall, World, GRID_WIDTH};
+    use super::{update_world, Baddie, Bullet, Cannon, GameObject, Shape, Wall, World, GRID_WIDTH};
     #[test]
     fn bullet_meets_enemy_both_destroyed() {
         // Arrange
         // 2 different bullets, 2 different baddies, and 1 of each about to collide
-        let hit_baddie = Baddie(GameObject::new(SqBox::new(
+        let hit_baddie = Baddie(GameObject::new(Shape::new(
             (5000, 5000),
             1000,
             (0, 0),
             0.0,
             0.0,
         )));
-        let missed_baddie = Baddie(GameObject::new(SqBox::new(
+        let missed_baddie = Baddie(GameObject::new(Shape::new(
             (5000, 7000),
             1000,
             (0, 0),
@@ -416,14 +255,14 @@ mod tests {
             0.0,
         )));
 
-        let hitting_bullet = Bullet(GameObject::new(SqBox::new(
+        let hitting_bullet = Bullet(GameObject::new(Shape::new(
             (4490, 4500),
             100,
             (1000, 0),
             0.0,
             0.0,
         )));
-        let missing_bullet = Bullet(GameObject::new(SqBox::new(
+        let missing_bullet = Bullet(GameObject::new(Shape::new(
             (4000, 4500),
             100,
             (0, 1000),

@@ -1,6 +1,8 @@
 use crate::game_logic::{Baddie, EntityId, GameObject, Wall, GRID_HEIGHT, GRID_WIDTH};
 use crate::geometry::{is_collision, Geometry, P};
 use std::collections::HashMap;
+use crate::entity::EntityId;
+use crate::world::ObjectGeometries;
 
 /// Bin size for spatial hashmap (square grid).
 /// 10000 / 1000 => 10 * 10 grid
@@ -30,7 +32,6 @@ fn grid_hash(center: P) -> i32 {
 }
 
 /// Just center points for now. TODO: Expand to handle polys + entity IDs
-type ObjectGeometries = HashMap<EntityId, Geometry>;
 type SpatialMap = HashMap<i32, Vec<EntityId>>;
 type SpatialIndex = HashMap<EntityId, i32>;
 
@@ -142,6 +143,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::{make_wall, make_baddie};
 
     #[test]
     fn grid_hash_1_2() {
@@ -155,12 +157,9 @@ mod tests {
     fn build_map_2walls_1bin() {
         // Arrange - 2 walls in bin 11
         let bin_expected = 11;
-        //let wall1_center = (1200, 1200);
-        //let wall2_center = (1700, 1700);
-        //let walls = vec![Wall::new(wall1_center), Wall::new(wall2_center)];
-        let wall1 = Wall::new((1200, 1200));
-        let wall2 = Wall::new((1700, 1700));
-        let walls_geoms: ObjectGeometries = [ (wall1.0.get_id(), wall1.0.geometry), (wall2.0.get_id(), wall2.0.geometry)  ].iter().cloned().collect();
+        let (wall1_id, _, wall1_geom) = make_wall((1200, 1200));
+        let (wall2_id, _ , wall2_geom) = make_wall((1700, 1700));
+        let walls_geoms: ObjectGeometries = [ (wall1_id, wall1_geom), (wall2_id, wall2_geom)  ].iter().cloned().collect();
 
         // Act        
         let (wall_map, wall_index) = build_map(&walls_geoms);
@@ -178,17 +177,15 @@ mod tests {
     #[test]
     fn collision_static_simple() {
         // Arrange - 2 walls, 2 baddies, 1 of each colliding, plus associated handler
-        let wall1 = Wall::new((1200, 1200));
-        let wall1_id = wall1.0.get_id();
-        let wall2 = Wall::new((1700, 1700));
-        let wall2_id = wall2.0.get_id();
-        let walls_geoms: ObjectGeometries = [ (wall1.0.get_id(), wall1.0.geometry), (wall2.0.get_id(), wall2.0.geometry)  ].iter().cloned().collect();
-        
-        let baddie1 = Baddie::new((1200, 1200), (0, 0), 0.0); // => colliding
-        let baddie1_id = baddie1.0.get_id();
-        let baddie2 = Baddie::new((0, 0), (0, 0), 0.0); // => not colliding
-        let baddie2_id = baddie2.0.get_id();
-        let baddies_geoms: ObjectGeometries = [ (baddie1.0.get_id(), baddie1.0.geometry), (baddie2.0.get_id(), baddie2.0.geometry)  ].iter().cloned().collect();
+        let (wall1_id, _, wall1_geom) = make_wall((1200, 1200));
+        let (wall2_id, _, wall2_geom) = make_wall((1700, 1700));
+        let walls_geoms: ObjectGeometries = [ (wall1_id, wall1_geom), (wall2_id, wall2_geometry) ].iter().cloned().collect();
+
+        // colliding baddie:
+        let (baddie1_id, baddie1_geom) = make_baddie((1200, 1200), (0, 0), 0.0);
+        // not colliding baddie:
+        let (baddie2_id, baddie2_geom) = make_baddie((0, 0), (0, 0), 0.0);
+        let baddies_geoms: ObjectGeometries = [ (baddie1.0.get_id(), baddie1.0.geometry), (baddie2.0.get_id(), baddie2.0.geometry) ].iter().cloned().collect();
         
         let handler = |wall_id: EntityId, baddie_id: EntityId| {
             // Assert - handler called with correct arguments
@@ -211,5 +208,30 @@ mod tests {
         collision_system.process(&walls_geoms, &baddies_geoms);
 
         // Assert - see handler, above
+    }
+
+    #[test]
+    fn collision_reverse_baddie() {
+        // Arrange - 2 walls, 2 baddies, 1 of each colliding, plus associated handler
+        //let wall = make_wall((1200, 1200));
+        let (wall_id, _, wall_geom) = make_wall((1200, 1200));
+        let walls_geoms: ObjectGeometries = [ (wall_id, wall_geom) ].iter().cloned().collect();
+        // colliding baddie:
+        let mut baddie = make_baddie((1200, 1200), (0, 0), 0.0);
+
+        let handler = |wall_id: EntityId, baddie_id: EntityId| {
+            baddie.1.reverse();
+        };
+        // TODO: Figure out how to get stuff into closure
+        // let handler = |wall_id: EntityId, baddie_id: EntityId| {
+        //     assert!(
+        //         wall_id == wall1.0.get_id()
+        //             && baddie_id == baddie1.0.get_id()
+        //             && !(baddie_id == baddie2.0.get_id())
+        //     )
+        // };
+        let collision_system = CollisionSystem::new(&walls, &baddies, handler);
+        // Act
+        collision_system.process(wall_geoms, baddie_geoms);
     }
 }

@@ -17,11 +17,19 @@ use std::time::{Duration, Instant};
 
 mod helpers;
 
+mod entity;
+mod shape;
+
 mod geometry;
 use geometry::*;
 
+mod world;
+
 mod game_logic;
 use game_logic::*;
+use crate::world::{World, ObjectGeometries};
+use crate::entity::{EntityId, EntityKind};
+use std::collections::HashMap;
 
 mod collision_system;
 
@@ -42,7 +50,7 @@ fn world_to_screen(coords: &(i32, i32)) -> (i32, i32) {
     (sx as i32, sy as i32)
 }
 
-fn render_box(canvas: &mut render::WindowCanvas, box_geometry: &[Vertex], color: Color) {
+fn render_box(canvas: &mut render::WindowCanvas, box_geometry: &[Vertex], color: &Color) {
     // COULDDO: Way to avoid reallocating here? (E.g. re-use existing render vec)
     let points: Vec<Point> = box_geometry
         .iter()
@@ -55,23 +63,19 @@ fn render_box(canvas: &mut render::WindowCanvas, box_geometry: &[Vertex], color:
     canvas.draw_lines(&points[..]).unwrap();
 }
 
-fn render(canvas: &mut render::WindowCanvas, world: &World) {
-    for bullet in &world.bullets {
-        render_box(canvas, &bullet.0.geometry, Color::RGB(74, 143, 255));
+fn render(canvas: &mut render::WindowCanvas, entities: &Entities, geometries: &Geometries) {
+    let colors: HashMap<EntityKind, Color> = [
+        (EntityKind::Bullet, Color::RGB(74, 143, 255)),
+        (EntityKind::Wall, Color::RGB(232, 225, 81)),
+        (EntityKind::Baddie, Color::RGB(235, 33, 35)),
+        (EntityKind::Cannon, Color::RGB(69, 247, 105)),
+    ].into_iter().collect();
+    for entity in entities {
+        render_box(canvas, geometries.get(entity.id).unwrap(), colors.get(entity.kind).unwrap());
     }
-
-    for wall in &world.walls {
-        render_box(canvas, &wall.0.geometry, Color::RGB(232, 225, 81));
-    }
-
-    for baddie in &world.baddies {
-        render_box(canvas, &baddie.0.geometry, Color::RGB(235, 33, 35));
-    }
-
-    render_box(canvas, &world.cannon.0.geometry, Color::RGB(69, 247, 105));
 }
 
-fn engine_run(world: &mut World) {
+fn engine_run(world: World) {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
@@ -200,5 +204,5 @@ fn init_level0() -> World {
 
 pub fn main() {
     let mut world = init_level();
-    engine_run(&mut world);
+    engine_run(world);
 }
