@@ -136,6 +136,22 @@ pub fn is_collision(poly1: &[P], poly2: &[P]) -> bool {
     true
 }
 
+pub fn direction_vector(direction: Direction) -> Vector {
+    match direction {
+        Direction::Up => (0, -1),
+        Direction::Down => (0, 1),
+        Direction::Left => (-1, 0),
+        Direction::Right => (1, 0),
+    }
+}
+
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

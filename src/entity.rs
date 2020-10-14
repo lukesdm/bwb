@@ -46,4 +46,13 @@ impl Entity {
             id, kind: Kind::UNDEFINED
         }
     }
+
+    /// Returns the entity's ID.
+    pub fn get_id(&self) -> EntityId {
+        self.id
+    }
+
+    pub fn get_kind(&self) -> &EntityKind {
+        &self.kind
+    }
 }

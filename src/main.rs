@@ -27,7 +27,7 @@ mod world;
 
 mod game_logic;
 use game_logic::*;
-use crate::world::{World, ObjectGeometries};
+use crate::world::{World, ObjectGeometries, GameObject, make_cannon, make_wall, make_baddie};
 use crate::entity::{EntityId, EntityKind};
 use std::collections::HashMap;
 
@@ -75,7 +75,7 @@ fn render(canvas: &mut render::WindowCanvas, entities: &Entities, geometries: &G
     }
 }
 
-fn engine_run(world: World) {
+fn engine_run(&mut world: World) {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
@@ -100,7 +100,7 @@ fn engine_run(world: World) {
 
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
-        render(&mut canvas, world);
+        render(&mut canvas, world.get_entities(), world.get_geometries());
         for event in event_pump.poll_iter() {
             match event {
                 Event::KeyDown {
@@ -110,8 +110,7 @@ fn engine_run(world: World) {
                     prev_fire_time = try_fire(
                         current_time,
                         prev_fire_time,
-                        &world.cannon,
-                        &mut world.bullets,
+                        world,
                         Direction::Left,
                     )
                 }
@@ -122,19 +121,18 @@ fn engine_run(world: World) {
                     prev_fire_time = try_fire(
                         current_time,
                         prev_fire_time,
-                        &world.cannon,
-                        &mut world.bullets,
+                        world,
                         Direction::Right,
                     )
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Up),
                     ..
-                } => world.cannon.moove(Direction::Up),
+                } => move_cannon(world,Direction::Up),
                 Event::KeyDown {
                     keycode: Some(Keycode::Down),
                     ..
-                } => world.cannon.moove(Direction::Down),
+                } => move_cannon(world,Direction::Down),
                 Event::Quit { .. }
                 | Event::KeyDown {
                     keycode: Some(Keycode::Escape),
@@ -152,14 +150,13 @@ fn engine_run(world: World) {
 }
 
 fn init_level() -> World {
+    let mut level_data = Vec::<GameObject>::new();
     const WALL_RATIO: u32 = 20; // % of generated entities that are walls.
     let seed: &[_] = &[1, 2, 3, 4];
     let mut rng: StdRng = SeedableRng::from_seed(seed);
     let mut next_random = |lower, upper| rng.gen_range(lower, upper + 1);
-    let cannon = Cannon::new((GRID_WIDTH as i32 / 2, GRID_HEIGHT as i32 / 2));
+    level_data.push(make_cannon((GRID_WIDTH as i32 / 2, GRID_HEIGHT as i32 / 2)));
 
-    let mut walls: Vec<Wall> = vec![];
-    let mut baddies: Vec<Baddie> = vec![];
     let mut curr_y = 0;
     while curr_y < GRID_HEIGHT {
         let y_inc = 200; // TODO: Parameterize
@@ -169,9 +166,9 @@ fn init_level() -> World {
             let x_inc = next_random(100, 1000); // TODO: Parameterize
             curr_x += x_inc as u32;
             if next_random(0, 100) < WALL_RATIO as i32 {
-                walls.push(Wall::new((curr_x as i32, curr_y as i32)));
+                level_data.push(make_wall((curr_x as i32, curr_y as i32)));
             } else {
-                baddies.push(Baddie::new(
+                level_data.push(make_baddie(
                     (curr_x as i32, curr_y as i32),
                     (next_random(-100, 100), next_random(-100, 100)),
                     next_random(-100, 100) as f32 / 100.0,
@@ -179,27 +176,26 @@ fn init_level() -> World {
             }
         }
     }
-    World::new(cannon, baddies, walls)
+    World::new(level_data)
 }
 
 /// Hardcoded first level - TODO: add back in once level system implemented.
 fn init_level0() -> World {
-    let cannon = Cannon::new((GRID_WIDTH as i32 / 2, GRID_HEIGHT as i32 / 2));
-    let walls = vec![
-        Wall::new((2500, 2500)),
-        Wall::new((7500, 2500)),
-        Wall::new((7500, 7500)),
-        Wall::new((2500, 7500)),
+    let level_data: Vec<GameObject> = vec![
+        make_cannon((GRID_WIDTH as i32 / 2, GRID_HEIGHT as i32 / 2)),
+        make_wall((2500, 2500)),
+        make_wall((7500, 2500)),
+        make_wall((7500, 7500)),
+        make_wall((2500, 7500)),
+        make_baddie((1000, 1000), (100, 200), 0.5),
+        make_baddie((4000, 2000), (-200, 100), 0.5),
+        make_baddie((6000, 500), (200, 75), 0.5),
+        make_baddie((2000, 6000), (100, -200), 0.5),
+        make_baddie((1500, 9000), (200, 0), 0.5),
+        make_baddie((6500, 7500), (50, -200), 0.5),
     ];
-    let baddies = vec![
-        Baddie::new((1000, 1000), (100, 200), 0.5),
-        Baddie::new((4000, 2000), (-200, 100), 0.5),
-        Baddie::new((6000, 500), (200, 75), 0.5),
-        Baddie::new((2000, 6000), (100, -200), 0.5),
-        Baddie::new((1500, 9000), (200, 0), 0.5),
-        Baddie::new((6500, 7500), (50, -200), 0.5),
-    ];
-    World::new(cannon, baddies, walls)
+
+    World::new(level_data)
 }
 
 pub fn main() {

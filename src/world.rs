@@ -3,6 +3,7 @@ use std::collections::{HashSet, HashMap};
 use crate::entity::{Entity, EntityId, EntityKind};
 use crate::shape::Shape;
 use std::f32::consts::PI;
+use std::collections::hash_set::Iter as SetIter;
 
 /// Aggregate of entity and associated data
 pub type GameObject = (Entity, Shape, Geometry);
@@ -16,12 +17,21 @@ pub struct World {
 }
 
 impl World {
-    // TODO: construct from level data
-    pub fn new() -> Self {
+    pub fn new(level_data: Vec<GameObject>) -> Self {
+        let mut entities = HashSet::<Entity>::new();
+        let mut shapes = HashMap::<EntityId, Shape>::new();
+        let mut geometries = ObjectGeometries::new();
+
+        for (entity, shape,geom ) in level_data.clone_into() {
+            entities.add(entity);
+            shapes.add(entity.id, shape);
+            geometries.add(entity.id, geometry)
+        }
+
         Self {
-            entities: HashSet::<Entity>::new(),
-            shapes: HashMap::<EntityId, Shape>::new(),
-            geometries: ObjectGeometries::new(),
+            entities,
+            shapes,
+            geometries,
         }
     }
 
@@ -39,6 +49,22 @@ impl World {
         self.geometries.remove(&id);
         self.shapes.remove(&id);
         self.entities.remove(&Entity::from_id(id));
+    }
+
+    pub fn get_entities(&self) -> &HashSet<Entity> {
+        &self.entities
+    }
+
+    // pub fn get_entities_by_kind(&self, kind: EntityKind) -> SetIter<Entity> {
+    //     &self.entities.iter().filter(|e| e.get_kind() == kind)
+    // }
+
+    pub fn get_shape(&self, id: EntityId) -> &Shape {
+        &self.shapes.get(&id).unwrap()
+    }
+
+    pub fn get_shape_mut(&self, id: EntityId) -> &mut Shape {
+        &mut self.shapes.get(&id).unwrap()
     }
 }
 
