@@ -14,7 +14,7 @@ use std::f32::consts::PI;
 use std::time::{Duration, Instant};
 use crate::shape::Shape;
 use crate::entity::{EntityKind, Entity};
-use crate::world::{World, ObjectGeometries, make_bullet};
+use crate::world::{World, ObjectGeometries, make_bullet, update_geometry};
 
 // World coordinate bounds
 pub const GRID_WIDTH: u32 = 10000;
@@ -22,28 +22,12 @@ pub const GRID_HEIGHT: u32 = 10000;
 
 
 
-/// Updates box geometry according to its state
-fn update_geometry(box_geometry: &mut [Vertex], box_state: &Shape) {
-    let (cx, cy) = box_state.get_center();
-    let delta = (box_state.get_size() / 2) as i32;
-    let vs = box_geometry;
-    vs[0] = (cx - delta, cy - delta);
-    vs[1] = (cx + delta, cy - delta);
-    vs[2] = (cx + delta, cy + delta);
-    vs[3] = (cx - delta, cy + delta);
 
-    // Repeat first to close shape - just an implementation detail, could be reworked.
-    vs[4] = (cx - delta, cy - delta);
-
-    for v in vs.iter_mut() {
-        rotate(v, &box_state.get_center(), *box_state.get_rotation())
-    }
-}
 
 fn get_cannon(world: &World) -> &Entity {
     world.get_entities()
         .iter()
-        .find(|e| e.get_kind() == EntityKind::Cannon)
+        .find(|e| *e.get_kind() == EntityKind::Cannon)
         .unwrap()
 }
 
@@ -116,12 +100,6 @@ fn update_pos(box_state: &mut Shape, dt: i32, wrap: bool) {
     box_state.rotate(dt as f32 / 1000.0);
 }
 
-fn update_geometry_all(shapes: &Shapes, geometries: &mut ObjectGeometries) {
-    for (id, shape) in shapes {
-        update_geometry(geometries.get_mut(id).unwrap(), shape);
-    }
-}
-
 // TODO: Reimplement
 // fn handle_bullet_hits(bullets: &mut Vec<Bullet>, baddies: &mut Vec<Baddie>) {
 //     // On collision, remove the bullet and the baddie, and resume with the other bullets, i.e. don't allow one bullet to destroy multiple baddies.
@@ -156,10 +134,10 @@ fn handle_bullet_misses(world: &mut World) {
 //fn handle_bullet_misses(bullets: &mut Vec<Bullet>) {
     let b_iter = world.get_entities().iter();
     let bullets = world.get_entities().iter()
-        .filter(|e| e.get_kind() == EntityKind::Bullet);
+        .filter(|e| *e.get_kind() == EntityKind::Bullet);
 
     let to_remove: Vec<&Entity> = bullets.filter(|b| {
-        let shape = world.get_shape(bullet.get_id());
+        let shape = world.get_shape(b.get_id());
         !is_inside_world(*shape.get_center())
     }).collect();
 

@@ -1,18 +1,19 @@
-use crate::geometry::{Geometry, P, Vector, scale, Vertex};
+use crate::geometry::{Geometry, P, Vector, scale, Vertex, rotate};
 use std::collections::{HashSet, HashMap};
 use crate::entity::{Entity, EntityId, EntityKind};
 use crate::shape::Shape;
 use std::f32::consts::PI;
-use std::collections::hash_set::Iter as SetIter;
 
 /// Aggregate of entity and associated data
 pub type GameObject = (Entity, Shape, Geometry);
 
+pub type Entities = HashSet<Entity>;
+pub type Shapes = HashMap<EntityId, Shape>;
 pub type ObjectGeometries = HashMap<EntityId, Geometry>;
 
 pub struct World {
-    entities: HashSet<Entity>,
-    shapes: HashMap<EntityId, Shape>,
+    entities: Entities,
+    shapes: Shapes,
     geometries: ObjectGeometries,
 }
 
@@ -22,10 +23,10 @@ impl World {
         let mut shapes = HashMap::<EntityId, Shape>::new();
         let mut geometries = ObjectGeometries::new();
 
-        for (entity, shape,geom ) in level_data.clone_into() {
-            entities.add(entity);
-            shapes.add(entity.id, shape);
-            geometries.add(entity.id, geometry)
+        for (entity, shape, geometry) in level_data {
+            entities.insert(entity);
+            shapes.insert(entity.get_id(), shape);
+            geometries.insert(entity.get_id(), geometry);
         }
 
         Self {
@@ -39,9 +40,9 @@ impl World {
     /// Adds the provided game object to the world
     pub fn add(&mut self, game_obj: GameObject) {
         let (entity, shape, geometry) = game_obj;
-        entities.add(entity);
-        shapes.add(shape);
-        geometries.add(geometry);
+        self.entities.insert(entity);
+        self.shapes.insert(entity.get_id(), shape);
+        self.geometries.insert(entity.get_id(), geometry);
     }
 
     /// Removes the given entity from the world
@@ -51,8 +52,16 @@ impl World {
         self.entities.remove(&Entity::from_id(id));
     }
 
-    pub fn get_entities(&self) -> &HashSet<Entity> {
+    pub fn get_entities(&self) -> &Entities {
         &self.entities
+    }
+
+    pub fn get_shapes(&self) -> &Shapes {
+        &self.shapes
+    }
+    
+    pub fn get_geometries(&self) -> &ObjectGeometries {
+        &self.geometries
     }
 
     // pub fn get_entities_by_kind(&self, kind: EntityKind) -> SetIter<Entity> {
@@ -65,6 +74,24 @@ impl World {
 
     pub fn get_shape_mut(&self, id: EntityId) -> &mut Shape {
         &mut self.shapes.get(&id).unwrap()
+    }
+}
+
+/// Updates box geometry according to its state
+pub fn update_geometry(box_geometry: &mut [Vertex], box_state: &Shape) {
+    let (cx, cy) = box_state.get_center();
+    let delta = (box_state.get_size() / 2) as i32;
+    let vs = box_geometry;
+    vs[0] = (cx - delta, cy - delta);
+    vs[1] = (cx + delta, cy - delta);
+    vs[2] = (cx + delta, cy + delta);
+    vs[3] = (cx - delta, cy + delta);
+
+    // Repeat first to close shape - just an implementation detail, could be reworked.
+    vs[4] = (cx - delta, cy - delta);
+
+    for v in vs.iter_mut() {
+        rotate(v, &box_state.get_center(), *box_state.get_rotation())
     }
 }
 
@@ -85,19 +112,19 @@ pub fn make_cannon(center: P) -> GameObject {
         PI / 4.0,
         0.0,
     );
-    (Entity::new(EntityKind::Cannon), shape, make_box_geometry(&shape))
+    (Entity::new(EntityKind::Cannon), shape, build_box_geometry(&shape))
 }
 
 /// Creates a bullet
 pub fn make_bullet(center: P, direction: Vector) -> GameObject {
     let shape = Shape::new(
-        start,
+        center,
         100,
         scale(direction, 1000),
         0.0,
         0.0,
     );
-    (Entity::new(EntityKind::Bullet), shape, make_box_geometry(&shape))
+    (Entity::new(EntityKind::Bullet), shape, build_box_geometry(&shape))
 }
 
 pub fn make_baddie(start: P, vel: Vector, rotation_speed: f32) -> GameObject {
@@ -109,7 +136,7 @@ pub fn make_baddie(start: P, vel: Vector, rotation_speed: f32) -> GameObject {
         0.0,
         rotation_speed,
     );
-    (Entity::new(kind: EntityKind::Baddie), shape, build_box_geometry(&shape))
+    (Entity::new(EntityKind::Baddie), shape, build_box_geometry(&shape))
 }
 
 pub fn make_wall(center: P) -> GameObject {

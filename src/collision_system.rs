@@ -1,4 +1,4 @@
-use crate::game_logic::{Baddie, EntityId, GameObject, Wall, GRID_HEIGHT, GRID_WIDTH};
+use crate::game_logic::{GRID_HEIGHT, GRID_WIDTH};
 use crate::geometry::{is_collision, Geometry, P};
 use std::collections::HashMap;
 use crate::entity::EntityId;

@@ -58,7 +58,7 @@ impl Shape {
     /// Updates shape rotation, given a time-step (seconds)
     pub fn rotate(&mut self, dt_s: f32) {
         // SHOULDDO: Wrap this to [-2*PI, +2*PI], otherwise there might be jumps on overflow
-        self.rotation += self.angular_velocity * dt;
+        self.rotation += self.angular_velocity * dt_s;
     }
 
     /// Reverses the velocity vector
