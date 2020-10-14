@@ -16,7 +16,7 @@ fn generate_id() -> EntityId {
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct EntityId(u32);
 
-#[derive(PartialEq, Clone, Hash, Eq)]
+#[derive(PartialEq, Clone, Copy, Hash, Eq)]
 pub enum EntityKind {
     Baddie,
     Wall,
@@ -29,7 +29,7 @@ pub enum EntityKind {
 
 // TODO: Hash by id to satisfy HashSet in World  (i.e. ignore kind, if implemented) or... get rid and just use EntityId
 /// An entity that exists in the world.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Entity {
     id: EntityId,
     kind: EntityKind,

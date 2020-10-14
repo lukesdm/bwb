@@ -63,7 +63,7 @@ pub fn try_fire(
 // (ACTION)
 pub fn move_cannon(world: &mut World, direction: Direction) {
     let cannon_id = get_cannon(world).get_id();
-    world.get_shape(cannon_id).set_movement(direction);
+    world.get_shape_mut(cannon_id).set_movement(direction);
 }
 
 fn move_with_wrap(start: i32, amt: i32, bound: i32) -> i32 {
@@ -196,7 +196,7 @@ pub fn update_world(world: &mut World, dt: i32) {
 
     // Update geometry ready for collision detection
     let shapes = world.get_shapes();
-    let geometries = world.get_geometries();
+    let geometries = world.get_geometries_mut();
     for (id, shape) in shapes {
         update_geometry(geometries.get_mut(id).unwrap(), shape);
     }

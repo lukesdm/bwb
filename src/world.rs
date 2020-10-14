@@ -64,6 +64,10 @@ impl World {
         &self.geometries
     }
 
+    pub fn get_geometries_mut(&mut self) -> &mut ObjectGeometries {
+        &mut self.geometries
+    }
+
     // pub fn get_entities_by_kind(&self, kind: EntityKind) -> SetIter<Entity> {
     //     &self.entities.iter().filter(|e| e.get_kind() == kind)
     // }
@@ -72,8 +76,8 @@ impl World {
         &self.shapes.get(&id).unwrap()
     }
 
-    pub fn get_shape_mut(&self, id: EntityId) -> &mut Shape {
-        &mut self.shapes.get(&id).unwrap()
+    pub fn get_shape_mut(&mut self, id: EntityId) -> &mut Shape {
+        self.shapes.get_mut(&id).unwrap()
     }
 }
 
@@ -112,7 +116,8 @@ pub fn make_cannon(center: P) -> GameObject {
         PI / 4.0,
         0.0,
     );
-    (Entity::new(EntityKind::Cannon), shape, build_box_geometry(&shape))
+    let geom = build_box_geometry(&shape);
+    (Entity::new(EntityKind::Cannon), shape, geom)
 }
 
 /// Creates a bullet
@@ -124,7 +129,8 @@ pub fn make_bullet(center: P, direction: Vector) -> GameObject {
         0.0,
         0.0,
     );
-    (Entity::new(EntityKind::Bullet), shape, build_box_geometry(&shape))
+    let geom = build_box_geometry(&shape);
+    (Entity::new(EntityKind::Bullet), shape, geom)
 }
 
 pub fn make_baddie(start: P, vel: Vector, rotation_speed: f32) -> GameObject {
@@ -136,7 +142,8 @@ pub fn make_baddie(start: P, vel: Vector, rotation_speed: f32) -> GameObject {
         0.0,
         rotation_speed,
     );
-    (Entity::new(EntityKind::Baddie), shape, build_box_geometry(&shape))
+    let geom = build_box_geometry(&shape);
+    (Entity::new(EntityKind::Baddie), shape, geom)
 }
 
 pub fn make_wall(center: P) -> GameObject {
@@ -148,5 +155,6 @@ pub fn make_wall(center: P) -> GameObject {
         0.0,
         0.0,
     );
-    (Entity::new(EntityKind::Wall), shape, build_box_geometry(&shape))
+    let geom = build_box_geometry(&shape);
+    (Entity::new(EntityKind::Wall), shape, geom)
 }

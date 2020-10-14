@@ -116,7 +116,7 @@ where
 
     /// Check collisions and run appropriate handlers
     // TODO: Handle geometry spanning multiple bins
-    pub fn process(&self, walls: &ObjectGeometries, baddies: &ObjectGeometries) {
+    pub fn process(&mut self, walls: &ObjectGeometries, baddies: &ObjectGeometries) {
         let bin_count = 100; // TODO: Calculate
         for i in 0..bin_count {
             if let Some(wall_ids) = self.wall_map.get(&i) {
@@ -202,7 +202,7 @@ mod tests {
         //             && !(baddie_id == baddie2.0.get_id())
         //     )
         // };
-        let collision_system = CollisionSystem::new(&walls_geoms, &baddies_geoms, handler);
+        let mut collision_system = CollisionSystem::new(&walls_geoms, &baddies_geoms, handler);
         
         // Act
         collision_system.process(&walls_geoms, &baddies_geoms);
@@ -231,7 +231,7 @@ mod tests {
         //             && !(baddie_id == baddie2.0.get_id())
         //     )
         // };
-        let collision_system = CollisionSystem::new(&walls_geoms, &baddies_geoms, handler);
+        let mut collision_system = CollisionSystem::new(&walls_geoms, &baddies_geoms, handler);
         // Act
         collision_system.process(&walls_geoms, &baddies_geoms);
     }
