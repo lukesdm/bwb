@@ -144,6 +144,7 @@ where
 mod tests {
     use super::*;
     use crate::world::{make_wall, make_baddie};
+    use crate::helpers::set_eq;
 
     #[test]
     fn grid_hash_1_2() {
@@ -165,10 +166,11 @@ mod tests {
         let (wall_map, wall_index) = build_map(&walls_geoms);
 
         // Assert - map
-        assert_eq!(
-            wall_map.get(&bin_expected),
-            Some(&vec![wall2.get_id(), wall1.get_id()]) // Order here is an implementation detail. COULDDO: make order-independent comparison
-        );
+        // Order of vec can change (random hash seed), so compare as set.
+        assert!(set_eq(
+            wall_map.get(&bin_expected).unwrap(),
+            &vec![wall1.get_id(), wall2.get_id()]
+        ));
         // Assert - index
         assert_eq!(wall_index.get(&wall1.get_id()), Some(&bin_expected));
         assert_eq!(wall_index.get(&wall2.get_id()), Some(&bin_expected));

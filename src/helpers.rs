@@ -1,5 +1,7 @@
 //! Fundamental helper functions
 
+use std::{collections::HashSet, hash::Hash};
+
 // TODO: Use a hashset for to_remove - solves duplicates issues
 // use std::collections::HashSet;
 // pub fn remove_multiple<T>(vector: &mut Vec<T>, to_remove: &HashSet<usize>) {
@@ -30,9 +32,22 @@ pub fn remove_multiple<T>(vector: &mut Vec<T>, to_remove: &Vec<usize>) {
     }
 }
 
+/// Tests whether the given vectors contain the same items, regardless of order
+/// from: https://stackoverflow.com/a/42748484
+//pub fn set_eq<T>
+pub fn set_eq<T>(a: &[T], b: &[T]) -> bool
+where
+    T: Eq + Hash,
+{
+    let a: HashSet<_> = a.iter().collect();
+    let b: HashSet<_> = b.iter().collect();
+
+    a == b
+}
+
 #[cfg(test)]
 mod tests {
-    use super::remove_multiple;
+    use super::{remove_multiple, set_eq};
 
     #[test]
     fn remove_multiple_0_3() {
@@ -119,5 +134,17 @@ mod tests {
 
         // Act
         remove_multiple(&mut vec, &to_remove);
+    }
+
+    #[test]
+    fn set_eq_test() {
+        assert!(set_eq(
+            &vec!["foo", "bar", "baz", "beh"],
+            &vec!["beh", "foo", "baz", "bar"]
+        ));
+        assert!(!set_eq(
+            &vec!["beh", "foo", "baz", "bar"],
+            &vec!["beh", "foo", "baz", "baz"]
+        ));
     }
 }
