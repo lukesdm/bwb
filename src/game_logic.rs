@@ -13,7 +13,7 @@ use crate::geometry::{is_collision, rotate, scale, Geometry, Vector, Vertex, P, 
 use std::f32::consts::PI;
 use std::time::{Duration, Instant};
 use crate::shape::Shape;
-use crate::entity::{EntityKind, Entity};
+use crate::entity::{EntityKind, Entity, EntityId};
 use crate::world::{World, ObjectGeometries, make_bullet, update_geometry};
 
 // World coordinate bounds
@@ -25,7 +25,7 @@ pub const GRID_HEIGHT: u32 = 10000;
 
 
 fn get_cannon(world: &World) -> &Entity {
-    world.get_entities()
+    world.entities
         .iter()
         .find(|e| *e.get_kind() == EntityKind::Cannon)
         .unwrap()
@@ -130,20 +130,22 @@ fn is_inside_world(point: P) -> bool {
 }
 
 /// Handle when bullets miss i.e. reach edge of world without hitting anything - remove them.
-fn handle_bullet_misses(world: &mut World) {
+fn handle_bullet_misses(mut world: World) -> World {
 //fn handle_bullet_misses(bullets: &mut Vec<Bullet>) {
-    let b_iter = world.get_entities().iter();
-    let bullets = world.get_entities().iter()
+    let bullets = world.entities.iter()
         .filter(|e| *e.get_kind() == EntityKind::Bullet);
 
-    let to_remove: Vec<&Entity> = bullets.filter(|b| {
+    let to_remove: Vec<EntityId> = bullets.filter(|b| {
         let shape = world.get_shape(b.get_id());
         !is_inside_world(*shape.get_center())
-    }).collect();
+    }).map(|b| b.get_id())
+    .collect();
 
     for b in to_remove {
-        world.remove(b.get_id());
+        world.remove(b);
     }
+
+    world
 }
 
 // TODO: Reimplement
@@ -180,11 +182,10 @@ fn handle_bullet_misses(world: &mut World) {
 //     }
 // }
 
-pub fn update_world(world: &mut World, dt: i32) {
+pub fn update_world(mut world: World, dt: i32) -> World {
 
-    for entity in world.get_entities() {
-        //let mut shape = world.get_shape_mut(entity.get_id());
-        let shape = world.get_shape_mut(entity.get_id());
+    for entity in world.entities.iter() {
+        let shape = world.shapes.get_mut(&entity.get_id()).unwrap();
         match entity.get_kind() {
             EntityKind::Baddie => update_pos(shape, dt, true),
             EntityKind::Cannon => update_pos(shape, dt, true),
@@ -195,15 +196,17 @@ pub fn update_world(world: &mut World, dt: i32) {
     }
 
     // Update geometry ready for collision detection
-    let shapes = world.get_shapes();
-    let geometries = world.get_geometries_mut();
-    for (id, shape) in shapes {
-        update_geometry(geometries.get_mut(id).unwrap(), shape);
+    //let geometries = world.geometries;
+    
+    for (id, shape) in world.shapes.iter() {
+        let geometry = world.geometries.get_mut(&id).unwrap();
+        update_geometry(geometry, shape);
     }
+    
 
     // TODO: Reimplment
     //handle_bullet_hits(&mut game_objects.bullets, &mut game_objects.baddies);
-    handle_bullet_misses(world);
+    handle_bullet_misses(world)
 
     // TODO: Reimplment
     //handle_wall_collisions(&game_objects.walls, &mut game_objects.baddies);

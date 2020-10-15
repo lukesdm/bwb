@@ -75,7 +75,7 @@ fn render(canvas: &mut render::WindowCanvas, entities: &Entities, geometries: &O
     }
 }
 
-fn engine_run(world: &mut World) {
+fn engine_run(mut world: World) {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
@@ -91,16 +91,17 @@ fn engine_run(world: &mut World) {
     // Previous fire time - set such that the player can take their first shot from the start of the game.
     let mut prev_fire_time = current_time - Duration::from_secs(10);
 
+    //let mut world = world;
     'running: loop {
         let new_time = Instant::now();
         let frame_time = (new_time - current_time).as_millis() as i32;
         current_time = new_time;
 
-        update_world(world, frame_time);
+        world = update_world(world, frame_time);
 
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
-        render(&mut canvas, world.get_entities(), world.get_geometries());
+        render(&mut canvas, &world.entities, &world.geometries);
         for event in event_pump.poll_iter() {
             match event {
                 Event::KeyDown {
@@ -110,7 +111,7 @@ fn engine_run(world: &mut World) {
                     prev_fire_time = try_fire(
                         current_time,
                         prev_fire_time,
-                        world,
+                        &mut world,
                         Direction::Left,
                     )
                 }
@@ -121,18 +122,18 @@ fn engine_run(world: &mut World) {
                     prev_fire_time = try_fire(
                         current_time,
                         prev_fire_time,
-                        world,
+                        &mut world,
                         Direction::Right,
                     )
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Up),
                     ..
-                } => move_cannon(world,Direction::Up),
+                } => move_cannon(&mut world,Direction::Up),
                 Event::KeyDown {
                     keycode: Some(Keycode::Down),
                     ..
-                } => move_cannon(world,Direction::Down),
+                } => move_cannon(&mut world,Direction::Down),
                 Event::Quit { .. }
                 | Event::KeyDown {
                     keycode: Some(Keycode::Escape),
@@ -200,5 +201,5 @@ fn init_level0() -> World {
 
 pub fn main() {
     let mut world = init_level();
-    engine_run(&mut world);
+    engine_run(world);
 }

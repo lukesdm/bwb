@@ -12,9 +12,9 @@ pub type Shapes = HashMap<EntityId, Shape>;
 pub type ObjectGeometries = HashMap<EntityId, Geometry>;
 
 pub struct World {
-    entities: Entities,
-    shapes: Shapes,
-    geometries: ObjectGeometries,
+    pub entities: Entities,
+    pub shapes: Shapes,
+    pub geometries: ObjectGeometries,
 }
 
 impl World {
@@ -52,21 +52,29 @@ impl World {
         self.entities.remove(&Entity::from_id(id));
     }
 
-    pub fn get_entities(&self) -> &Entities {
-        &self.entities
-    }
+    // pub fn get_entities(&self) -> &Entities {
+    //     &self.entities
+    // }
 
-    pub fn get_shapes(&self) -> &Shapes {
-        &self.shapes
-    }
+    // pub fn get_entities_mut(&mut self) -> &mut Entities {
+    //     &mut self.entities
+    // }
+
+    // pub fn get_shapes(&self) -> &Shapes {
+    //     &self.shapes
+    // }
+
+    // pub fn get_shapes_mut(&mut self) -> &Shapes {
+    //     &mut self.shapes
+    // }
     
-    pub fn get_geometries(&self) -> &ObjectGeometries {
-        &self.geometries
-    }
+    // pub fn get_geometries(&self) -> &ObjectGeometries {
+    //     &self.geometries
+    // }
 
-    pub fn get_geometries_mut(&mut self) -> &mut ObjectGeometries {
-        &mut self.geometries
-    }
+    // pub fn get_geometries_mut(&mut self) -> &mut ObjectGeometries {
+    //     &mut self.geometries
+    // }
 
     // pub fn get_entities_by_kind(&self, kind: EntityKind) -> SetIter<Entity> {
     //     &self.entities.iter().filter(|e| e.get_kind() == kind)
