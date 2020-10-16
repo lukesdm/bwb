@@ -199,14 +199,6 @@ mod tests {
                     && !(baddie_id == baddie2.get_id() || wall_id == wall2.get_id())
             )
         };
-        // TODO: Figure out how to get stuff into closure
-        // let handler = |wall_id: EntityId, baddie_id: EntityId| {
-        //     assert!(
-        //         wall_id == wall1.0.get_id()
-        //             && baddie_id == baddie1.0.get_id()
-        //             && !(baddie_id == baddie2.0.get_id())
-        //     )
-        // };
         let mut collision_system = CollisionSystem::new(&walls_geoms, &baddies_geoms, handler);
         
         // Act
@@ -217,27 +209,23 @@ mod tests {
 
     #[test]
     fn collision_reverse_baddie() {
-        // Arrange - 2 walls, 2 baddies, 1 of each colliding, plus associated handler
-        //let wall = make_wall((1200, 1200));
+        // Arrange - 1 wall, 1 baddies, colliding, plus associated handler
         let (wall, _, wall_geom) = make_wall((1200, 1200));
         let walls_geoms: ObjectGeometries = [ (wall.get_id(), wall_geom) ].iter().cloned().collect();
-        // colliding baddie:
-        let mut baddie = make_baddie((1200, 1200), (0, 0), 0.0);
-        let baddies_geoms: ObjectGeometries = [ (baddie.0.get_id(), baddie.2) ].iter().cloned().collect();
+
+        let (baddie, mut baddie_shape, baddie_geom) = make_baddie((1200, 1200), (1000, 0), 0.0);
+        let baddies_geoms: ObjectGeometries = [ (baddie.get_id(), baddie_geom) ].iter().cloned().collect();
 
         let handler = |wall_id: EntityId, baddie_id: EntityId| {
-            baddie.1.reverse();
+            assert_eq!(wall_id, wall.get_id());
+            assert_eq!(baddie_id, baddie.get_id());
+            baddie_shape.reverse();
         };
-        // TODO: Figure out how to get stuff into closure
-        // let handler = |wall_id: EntityId, baddie_id: EntityId| {
-        //     assert!(
-        //         wall_id == wall1.0.get_id()
-        //             && baddie_id == baddie1.0.get_id()
-        //             && !(baddie_id == baddie2.0.get_id())
-        //     )
-        // };
         let mut collision_system = CollisionSystem::new(&walls_geoms, &baddies_geoms, handler);
         // Act
         collision_system.process(&walls_geoms, &baddies_geoms);
+
+        // Assert
+        assert_eq!(*baddie_shape.get_vel(), (-1000, 0));
     }
 }
