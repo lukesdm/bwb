@@ -1,9 +1,9 @@
+use crate::entity::EntityId;
 use crate::game_logic::{GRID_HEIGHT, GRID_WIDTH};
 use crate::geometry::{is_collision, Geometry, P};
-use std::collections::{HashSet, HashMap};
-use std::iter::FromIterator;
-use crate::entity::EntityId;
 use crate::world::ObjectGeometries;
+use std::collections::{HashMap, HashSet};
+use std::iter::FromIterator;
 
 /// Bin size for spatial hashmap (square grid).
 /// 10000 / 1000 => 10 * 10 grid
@@ -47,7 +47,9 @@ fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
         let grid_bin = grid_hash(center); // TODO: use all geometry
         object_map
             .entry(grid_bin)
-            .and_modify(|e| { e.insert(*id); })
+            .and_modify(|e| {
+                e.insert(*id);
+            })
             .or_insert(HashSet::from_iter([*id].iter().cloned()));
 
         let existing = object_index.insert(*id, grid_bin);
@@ -59,14 +61,8 @@ fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
     (object_map, object_index)
 }
 
-type CenterPoint = P;
-
-//pub type CollisionData = (EntityId, CenterPoint, Geometry);
-
-//type Wall = CollisionData;
-//type Baddie = CollisionData;
-
-//type CollisionHandler = Fn(Wall, Baddie) -> ();
+// Needs to be a Trait alias, which only exist in rustc-unstable
+//type CollisionHandler = FnMut(EntityId, EntityId) -> ();
 
 /// Detects collisions and runs handlers as appropriate
 pub struct CollisionSystem<THandler>
@@ -81,22 +77,14 @@ where
     baddie_map: SpatialMap,
     baddie_index: SpatialIndex,
     handler: THandler,
-    //walls: &'a Vec<CollisionData>,
-    //baddies: &'a Vec<CollisionData>,
 }
 
 impl<THandler> CollisionSystem<THandler>
 where
     THandler: FnMut(EntityId, EntityId) -> (),
 {
-    //where THandler: Fn(Wall, Baddie) -> () {
-    //pub fn new(walls: &'a Vec<CollisionData>, baddies: &'a Vec<CollisionData>, handler: THandler) -> Self {
-    pub fn new(
-        walls: &ObjectGeometries,
-        baddies: &ObjectGeometries,
-        handler: THandler,
-    ) -> Self {
-        // build hashmaps from world
+    pub fn new(walls: &ObjectGeometries, baddies: &ObjectGeometries, handler: THandler) -> Self {
+        // build hashmaps from object geometries
 
         // let bullet_map = 0;
         // let bullet_index = 0;
@@ -143,7 +131,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::{make_wall, make_baddie};
+    use crate::world::{make_baddie, make_wall};
 
     #[test]
     fn grid_hash_1_2() {
@@ -158,22 +146,19 @@ mod tests {
         // Arrange - 2 walls in bin 11
         let bin_expected = 11;
         let (wall1, _, wall1_geom) = make_wall((1200, 1200));
-        let (wall2, _ , wall2_geom) = make_wall((1700, 1700));
-        let walls_geoms: ObjectGeometries = [ (wall1.get_id(), wall1_geom), (wall2.get_id(), wall2_geom)  ].iter().cloned().collect();
+        let (wall2, _, wall2_geom) = make_wall((1700, 1700));
+        let walls_geoms: ObjectGeometries =
+            [(wall1.get_id(), wall1_geom), (wall2.get_id(), wall2_geom)]
+                .iter()
+                .cloned()
+                .collect();
         let expected = HashSet::from_iter([wall1.get_id(), wall2.get_id()].iter().cloned());
-        // Act        
+        // Act
         let (wall_map, wall_index) = build_map(&walls_geoms);
 
         // Assert - map
-        // Order of vec can change (random hash seed), so compare as set.
-        assert_eq!(
-            wall_map.get(&bin_expected).unwrap(),
-            &expected
-        );
-        // assert!(set_eq(
-        //     wall_map.get(&bin_expected).unwrap(),
-        //     &vec![wall1.get_id(), wall2.get_id()]
-        // ));
+        assert_eq!(wall_map.get(&bin_expected).unwrap(), &expected);
+
         // Assert - index
         assert_eq!(wall_index.get(&wall1.get_id()), Some(&bin_expected));
         assert_eq!(wall_index.get(&wall2.get_id()), Some(&bin_expected));
@@ -184,14 +169,23 @@ mod tests {
         // Arrange - 2 walls, 2 baddies, 1 of each colliding, plus associated handler
         let (wall1, _, wall1_geom) = make_wall((1200, 1200));
         let (wall2, _, wall2_geom) = make_wall((1700, 1700));
-        let walls_geoms: ObjectGeometries = [ (wall1.get_id(), wall1_geom), (wall2.get_id(), wall2_geom) ].iter().cloned().collect();
+        let walls_geoms: ObjectGeometries =
+            [(wall1.get_id(), wall1_geom), (wall2.get_id(), wall2_geom)]
+                .iter()
+                .cloned()
+                .collect();
 
         // colliding baddie:
         let (baddie1, _, baddie1_geom) = make_baddie((1200, 1200), (0, 0), 0.0);
         // not colliding baddie:
         let (baddie2, _, baddie2_geom) = make_baddie((0, 0), (0, 0), 0.0);
-        let baddies_geoms: ObjectGeometries = [ (baddie1.get_id(), baddie1_geom), (baddie2.get_id(), baddie2_geom) ].iter().cloned().collect();
-        
+        let baddies_geoms: ObjectGeometries = [
+            (baddie1.get_id(), baddie1_geom),
+            (baddie2.get_id(), baddie2_geom),
+        ]
+        .iter()
+        .cloned()
+        .collect();
         let handler = |wall_id: EntityId, baddie_id: EntityId| {
             // Assert - handler called with correct arguments
             assert!(
@@ -200,7 +194,6 @@ mod tests {
             )
         };
         let mut collision_system = CollisionSystem::new(&walls_geoms, &baddies_geoms, handler);
-        
         // Act
         collision_system.process(&walls_geoms, &baddies_geoms);
 
@@ -211,10 +204,11 @@ mod tests {
     fn collision_reverse_baddie() {
         // Arrange - 1 wall, 1 baddies, colliding, plus associated handler
         let (wall, _, wall_geom) = make_wall((1200, 1200));
-        let walls_geoms: ObjectGeometries = [ (wall.get_id(), wall_geom) ].iter().cloned().collect();
+        let walls_geoms: ObjectGeometries = [(wall.get_id(), wall_geom)].iter().cloned().collect();
 
         let (baddie, mut baddie_shape, baddie_geom) = make_baddie((1200, 1200), (1000, 0), 0.0);
-        let baddies_geoms: ObjectGeometries = [ (baddie.get_id(), baddie_geom) ].iter().cloned().collect();
+        let baddies_geoms: ObjectGeometries =
+            [(baddie.get_id(), baddie_geom)].iter().cloned().collect();
 
         let handler = |wall_id: EntityId, baddie_id: EntityId| {
             assert_eq!(wall_id, wall.get_id());
