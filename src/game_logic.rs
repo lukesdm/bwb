@@ -50,10 +50,10 @@ pub fn try_fire(
     // 1 / rate of fire
     const RELOAD_TIME: Duration = Duration::from_millis(1000);
 
-    let cannon_pos = get_cannon_pos(world);
+    let cannon_pos = *get_cannon_pos(world);
 
     if now > prev + RELOAD_TIME {
-        world.add(make_bullet(*cannon_pos, direction_vector(direction)));
+        world.add(make_bullet(cannon_pos, direction_vector(direction)));
         //fire(cannon, bullets, direction);
         return now;
     }
