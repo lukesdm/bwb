@@ -2,11 +2,7 @@
 
 use std::{collections::HashSet, hash::Hash};
 
-// TODO: Use a hashset for to_remove - solves duplicates issues
-// use std::collections::HashSet;
-// pub fn remove_multiple<T>(vector: &mut Vec<T>, to_remove: &HashSet<usize>) {
-
-/// Remove multiple elements from a vector, given a collection of the indices to remove.
+/// Removes multiple elements from a vector, given a collection of indices to remove.
 pub fn remove_multiple<T>(vector: &mut Vec<T>, to_remove: &Vec<usize>) {
     // As items are removed, their indices will change, so we have to keep track of the new indices.
     let mut to_remove = to_remove.to_vec();

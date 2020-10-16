@@ -26,9 +26,11 @@ use geometry::*;
 mod world;
 
 mod game_logic;
+use crate::entity::EntityKind;
+use crate::world::{
+    make_baddie, make_cannon, make_wall, Entities, GameObject, ObjectGeometries, World,
+};
 use game_logic::*;
-use crate::world::{World, ObjectGeometries, Entities, Shapes, GameObject, make_cannon, make_wall, make_baddie};
-use crate::entity::{EntityId, EntityKind};
 use std::collections::HashMap;
 
 mod collision_system;
@@ -69,9 +71,16 @@ fn render(canvas: &mut render::WindowCanvas, entities: &Entities, geometries: &O
         (EntityKind::Wall, Color::RGB(232, 225, 81)),
         (EntityKind::Baddie, Color::RGB(235, 33, 35)),
         (EntityKind::Cannon, Color::RGB(69, 247, 105)),
-    ].into_iter().cloned().collect();
+    ]
+    .iter()
+    .cloned()
+    .collect();
     for entity in entities {
-        render_box(canvas, geometries.get(&entity.get_id()).unwrap(), *colors.get(entity.get_kind()).unwrap());
+        render_box(
+            canvas,
+            geometries.get(&entity.get_id()).unwrap(),
+            *colors.get(entity.get_kind()).unwrap(),
+        );
     }
 }
 
@@ -108,32 +117,24 @@ fn engine_run(mut world: World) {
                     keycode: Some(Keycode::Left),
                     ..
                 } => {
-                    prev_fire_time = try_fire(
-                        current_time,
-                        prev_fire_time,
-                        &mut world,
-                        Direction::Left,
-                    )
+                    prev_fire_time =
+                        try_fire(current_time, prev_fire_time, &mut world, Direction::Left)
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Right),
                     ..
                 } => {
-                    prev_fire_time = try_fire(
-                        current_time,
-                        prev_fire_time,
-                        &mut world,
-                        Direction::Right,
-                    )
+                    prev_fire_time =
+                        try_fire(current_time, prev_fire_time, &mut world, Direction::Right)
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Up),
                     ..
-                } => move_cannon(&mut world,Direction::Up),
+                } => move_cannon(&mut world, Direction::Up),
                 Event::KeyDown {
                     keycode: Some(Keycode::Down),
                     ..
-                } => move_cannon(&mut world,Direction::Down),
+                } => move_cannon(&mut world, Direction::Down),
                 Event::Quit { .. }
                 | Event::KeyDown {
                     keycode: Some(Keycode::Escape),
@@ -200,6 +201,6 @@ fn init_level0() -> World {
 }
 
 pub fn main() {
-    let mut world = init_level();
+    let world = init_level();
     engine_run(world);
 }

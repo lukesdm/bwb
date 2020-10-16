@@ -12,7 +12,7 @@ pub type Vertex = Vector;
 // Might be tempting to combine the above types, but conceptually they are different things, e.g. the centre point of a box is not a vertice.
 // P and Vertex can be described by position vectors though, hence just alias the same. // TODO: Use newtype
 
-// An interval/range of (Min, Max)
+/// An interval/range of (Min, Max)
 pub type MinMax = (i32, i32);
 
 pub type Geometry = [Vertex; 5];
