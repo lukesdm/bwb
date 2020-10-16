@@ -1,6 +1,7 @@
 use crate::game_logic::{GRID_HEIGHT, GRID_WIDTH};
 use crate::geometry::{is_collision, Geometry, P};
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
+use std::iter::FromIterator;
 use crate::entity::EntityId;
 use crate::world::ObjectGeometries;
 
@@ -32,11 +33,10 @@ fn grid_hash(center: P) -> i32 {
 }
 
 /// Just center points for now. TODO: Expand to handle polys + entity IDs
-type SpatialMap = HashMap<i32, Vec<EntityId>>;
+type SpatialMap = HashMap<i32, HashSet<EntityId>>;
 type SpatialIndex = HashMap<EntityId, i32>;
 
 /// Build map of bin -> object list, and associated index (currently using center point, as a rough way to ID an object)
-//fn build_map(objects: &Vec<CollisionData>) -> (SpatialMap, SpatialIndex) {
 fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
     let mut object_map = SpatialMap::new();
     let mut object_index = SpatialIndex::new();
@@ -47,8 +47,8 @@ fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
         let grid_bin = grid_hash(center); // TODO: use all geometry
         object_map
             .entry(grid_bin)
-            .and_modify(|e| e.push(*id))
-            .or_insert(vec![*id]);
+            .and_modify(|e| { e.insert(*id); })
+            .or_insert(HashSet::from_iter([*id].iter().cloned()));
 
         let existing = object_index.insert(*id, grid_bin);
         // theoretical problem to watch out for (but not yet a real concern)
@@ -144,7 +144,6 @@ where
 mod tests {
     use super::*;
     use crate::world::{make_wall, make_baddie};
-    use crate::helpers::set_eq;
 
     #[test]
     fn grid_hash_1_2() {
@@ -161,16 +160,20 @@ mod tests {
         let (wall1, _, wall1_geom) = make_wall((1200, 1200));
         let (wall2, _ , wall2_geom) = make_wall((1700, 1700));
         let walls_geoms: ObjectGeometries = [ (wall1.get_id(), wall1_geom), (wall2.get_id(), wall2_geom)  ].iter().cloned().collect();
-
+        let expected = HashSet::from_iter([wall1.get_id(), wall2.get_id()].iter().cloned());
         // Act        
         let (wall_map, wall_index) = build_map(&walls_geoms);
 
         // Assert - map
         // Order of vec can change (random hash seed), so compare as set.
-        assert!(set_eq(
+        assert_eq!(
             wall_map.get(&bin_expected).unwrap(),
-            &vec![wall1.get_id(), wall2.get_id()]
-        ));
+            &expected
+        );
+        // assert!(set_eq(
+        //     wall_map.get(&bin_expected).unwrap(),
+        //     &vec![wall1.get_id(), wall2.get_id()]
+        // ));
         // Assert - index
         assert_eq!(wall_index.get(&wall1.get_id()), Some(&bin_expected));
         assert_eq!(wall_index.get(&wall2.get_id()), Some(&bin_expected));
