@@ -28,7 +28,7 @@ mod world;
 mod game_logic;
 use crate::entity::EntityKind;
 use crate::world::{
-    make_baddie, make_cannon, make_wall, Entities, GameObject, ObjectGeometries, World,
+    create_world, make_baddie, make_cannon, make_wall, Entities, GameObject, ObjectGeometries, World,
 };
 use game_logic::*;
 use std::collections::HashMap;
@@ -110,7 +110,7 @@ fn engine_run(mut world: World) {
 
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
-        render(&mut canvas, &world.entities, &world.geometries);
+        render(&mut canvas, &world.0, &world.2);
         for event in event_pump.poll_iter() {
             match event {
                 Event::KeyDown {
@@ -178,7 +178,7 @@ fn init_level() -> World {
             }
         }
     }
-    World::new(level_data)
+    create_world(level_data)
 }
 
 /// Hardcoded first level - TODO: add back in once level system implemented.
@@ -197,7 +197,7 @@ fn init_level0() -> World {
         make_baddie((6500, 7500), (50, -200), 0.5),
     ];
 
-    World::new(level_data)
+    create_world(level_data)
 }
 
 pub fn main() {

@@ -1,7 +1,7 @@
 use crate::entity::EntityId;
 use crate::game_logic::{GRID_HEIGHT, GRID_WIDTH};
 use crate::geometry::{is_collision, Geometry, P};
-use crate::world::ObjectGeometries;
+//use crate::world::ObjectGeometries;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 
@@ -31,6 +31,8 @@ fn grid_hash(center: P) -> i32 {
     let by = cy / GRID_BIN_SIZE;
     bx + by * GRID_WIDTH as i32 / GRID_BIN_SIZE
 }
+
+type ObjectGeometries<'a> = HashMap<EntityId, &'a Geometry>;
 
 /// Just center points for now. TODO: Expand to handle polys + entity IDs
 type SpatialMap = HashMap<i32, HashSet<EntityId>>;
@@ -113,7 +115,7 @@ where
                         for baddie_id in baddie_ids {
                             let wall_geom = walls.get(wall_id).unwrap();
                             let baddie_geom = baddies.get(baddie_id).unwrap();
-                            if is_collision(wall_geom, baddie_geom) {
+                            if is_collision(*wall_geom, *baddie_geom) {
                                 (self.handler)(*wall_id, *baddie_id);
                             }
                         }
@@ -148,7 +150,7 @@ mod tests {
         let (wall1, _, wall1_geom) = make_wall((1200, 1200));
         let (wall2, _, wall2_geom) = make_wall((1700, 1700));
         let walls_geoms: ObjectGeometries =
-            [(wall1.get_id(), wall1_geom), (wall2.get_id(), wall2_geom)]
+            [(wall1.get_id(), &wall1_geom), (wall2.get_id(), &wall2_geom)]
                 .iter()
                 .cloned()
                 .collect();
@@ -170,7 +172,7 @@ mod tests {
         let (wall1, _, wall1_geom) = make_wall((1200, 1200));
         let (wall2, _, wall2_geom) = make_wall((1700, 1700));
         let walls_geoms: ObjectGeometries =
-            [(wall1.get_id(), wall1_geom), (wall2.get_id(), wall2_geom)]
+            [(wall1.get_id(), &wall1_geom), (wall2.get_id(), &wall2_geom)]
                 .iter()
                 .cloned()
                 .collect();
@@ -180,8 +182,8 @@ mod tests {
         // not colliding baddie:
         let (baddie2, _, baddie2_geom) = make_baddie((0, 0), (0, 0), 0.0);
         let baddies_geoms: ObjectGeometries = [
-            (baddie1.get_id(), baddie1_geom),
-            (baddie2.get_id(), baddie2_geom),
+            (baddie1.get_id(), &baddie1_geom),
+            (baddie2.get_id(), &baddie2_geom),
         ]
         .iter()
         .cloned()
@@ -204,11 +206,11 @@ mod tests {
     fn collision_reverse_baddie() {
         // Arrange - 1 wall, 1 baddies, colliding, plus associated handler
         let (wall, _, wall_geom) = make_wall((1200, 1200));
-        let walls_geoms: ObjectGeometries = [(wall.get_id(), wall_geom)].iter().cloned().collect();
+        let walls_geoms: ObjectGeometries = [(wall.get_id(), &wall_geom)].iter().cloned().collect();
 
         let (baddie, mut baddie_shape, baddie_geom) = make_baddie((1200, 1200), (1000, 0), 0.0);
         let baddies_geoms: ObjectGeometries =
-            [(baddie.get_id(), baddie_geom)].iter().cloned().collect();
+            [(baddie.get_id(), &baddie_geom)].iter().cloned().collect();
 
         let handler = |wall_id: EntityId, baddie_id: EntityId| {
             assert_eq!(wall_id, wall.get_id());

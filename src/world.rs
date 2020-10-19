@@ -11,82 +11,71 @@ pub type Entities = HashSet<Entity>;
 pub type Shapes = HashMap<EntityId, Shape>;
 pub type ObjectGeometries = HashMap<EntityId, Geometry>;
 
-pub struct World {
-    pub entities: Entities,
-    pub shapes: Shapes,
-    pub geometries: ObjectGeometries,
+pub type World = (Entities, Shapes, ObjectGeometries);
+
+pub fn create_world(level_data: Vec<GameObject>) -> World {
+    let mut entities = HashSet::<Entity>::new();
+    let mut shapes = HashMap::<EntityId, Shape>::new();
+    let mut geometries = ObjectGeometries::new();
+
+    for (entity, shape, geometry) in level_data {
+        entities.insert(entity);
+        shapes.insert(entity.get_id(), shape);
+        geometries.insert(entity.get_id(), geometry);
+    }
+
+    (entities, shapes, geometries)
 }
 
-impl World {
-    pub fn new(level_data: Vec<GameObject>) -> Self {
-        let mut entities = HashSet::<Entity>::new();
-        let mut shapes = HashMap::<EntityId, Shape>::new();
-        let mut geometries = ObjectGeometries::new();
+/// Adds the provided game object to the world
+pub fn add(world: &mut World, game_obj: GameObject) {
+    let (entities, shapes, geometries) = world;
+    let (entity, shape, geometry) = game_obj;
+    entities.insert(entity);
+    shapes.insert(entity.get_id(), shape);
+    geometries.insert(entity.get_id(), geometry);
+}
 
-        for (entity, shape, geometry) in level_data {
-            entities.insert(entity);
-            shapes.insert(entity.get_id(), shape);
-            geometries.insert(entity.get_id(), geometry);
+/// Removes the given entity from the world
+pub fn remove(world: &mut World, id: EntityId) {
+    let (entities, shapes, geometries) = world;
+    geometries.remove(&id);
+    shapes.remove(&id);
+    entities.remove(&Entity::from_id(id));
+}
+
+pub fn get_entity(entities: &Entities, id: EntityId) -> &Entity {
+    entities.get(&Entity::from_id(id)).unwrap()
+}
+
+    // pub fn destructure_geom(&self) -> (HashMap<EntityId, &Geometry>, HashMap<EntityId, &Geometry>) {
+    //     let mut wall_geoms = HashMap::<EntityId, &Geometry>::new();
+    //     let mut baddie_geoms = HashMap::<EntityId, &Geometry>::new();
+    //     for (entity_id, geom) in self.geometries.iter() {
+    //         let entity_id = *entity_id;
+    //         let e = self.get_entity(entity_id);
+    //         match e.get_kind() {
+    //             EntityKind::Wall => { wall_geoms.insert(entity_id, geom); },
+    //             EntityKind::Baddie => { baddie_geoms.insert(entity_id, geom); },
+    //             _ => ()
+    //         }
+    //     }
+    //     (wall_geoms, baddie_geoms)
+    // }
+
+pub fn destructure_geom<'a>(entities: &'a Entities, geometries: &'a ObjectGeometries) -> (HashMap<EntityId, &'a Geometry>, HashMap<EntityId, &'a Geometry>) {
+    let mut wall_geoms = HashMap::<EntityId, &Geometry>::new();
+    let mut baddie_geoms = HashMap::<EntityId, &Geometry>::new();
+    for (entity_id, geom) in geometries.iter() {
+        let entity_id = *entity_id;
+        let e = get_entity(entities, entity_id);
+        match e.get_kind() {
+            EntityKind::Wall => { wall_geoms.insert(entity_id, geom); },
+            EntityKind::Baddie => { baddie_geoms.insert(entity_id, geom); },
+            _ => ()
         }
-
-        Self {
-            entities,
-            shapes,
-            geometries,
-        }
     }
-
-    // TODO: may need to rethink - narrow inputs down & generate rest of data in here?
-    /// Adds the provided game object to the world
-    pub fn add(&mut self, game_obj: GameObject) {
-        let (entity, shape, geometry) = game_obj;
-        self.entities.insert(entity);
-        self.shapes.insert(entity.get_id(), shape);
-        self.geometries.insert(entity.get_id(), geometry);
-    }
-
-    /// Removes the given entity from the world
-    pub fn remove(&mut self, id: EntityId) {
-        self.geometries.remove(&id);
-        self.shapes.remove(&id);
-        self.entities.remove(&Entity::from_id(id));
-    }
-
-    // pub fn get_entities(&self) -> &Entities {
-    //     &self.entities
-    // }
-
-    // pub fn get_entities_mut(&mut self) -> &mut Entities {
-    //     &mut self.entities
-    // }
-
-    // pub fn get_shapes(&self) -> &Shapes {
-    //     &self.shapes
-    // }
-
-    // pub fn get_shapes_mut(&mut self) -> &Shapes {
-    //     &mut self.shapes
-    // }
-    
-    // pub fn get_geometries(&self) -> &ObjectGeometries {
-    //     &self.geometries
-    // }
-
-    // pub fn get_geometries_mut(&mut self) -> &mut ObjectGeometries {
-    //     &mut self.geometries
-    // }
-
-    // pub fn get_entities_by_kind(&self, kind: EntityKind) -> SetIter<Entity> {
-    //     &self.entities.iter().filter(|e| e.get_kind() == kind)
-    // }
-
-    pub fn get_shape(&self, id: EntityId) -> &Shape {
-        &self.shapes.get(&id).unwrap()
-    }
-
-    pub fn get_shape_mut(&mut self, id: EntityId) -> &mut Shape {
-        self.shapes.get_mut(&id).unwrap()
-    }
+    (wall_geoms, baddie_geoms)
 }
 
 /// Updates box geometry according to its state
