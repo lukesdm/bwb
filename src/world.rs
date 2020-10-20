@@ -1,7 +1,7 @@
-use crate::geometry::{Geometry, P, Vector, scale, Vertex, rotate};
-use std::collections::{HashSet, HashMap};
 use crate::entity::{Entity, EntityId, EntityKind};
+use crate::geometry::{rotate, scale, Geometry, Vector, Vertex, P};
 use crate::shape::Shape;
+use std::collections::{HashMap, HashSet};
 use std::f32::consts::PI;
 
 /// Aggregate of entity and associated data
@@ -48,34 +48,33 @@ pub fn get_entity(entities: &Entities, id: EntityId) -> &Entity {
     entities.get(&Entity::from_id(id)).unwrap()
 }
 
-    // pub fn destructure_geom(&self) -> (HashMap<EntityId, &Geometry>, HashMap<EntityId, &Geometry>) {
-    //     let mut wall_geoms = HashMap::<EntityId, &Geometry>::new();
-    //     let mut baddie_geoms = HashMap::<EntityId, &Geometry>::new();
-    //     for (entity_id, geom) in self.geometries.iter() {
-    //         let entity_id = *entity_id;
-    //         let e = self.get_entity(entity_id);
-    //         match e.get_kind() {
-    //             EntityKind::Wall => { wall_geoms.insert(entity_id, geom); },
-    //             EntityKind::Baddie => { baddie_geoms.insert(entity_id, geom); },
-    //             _ => ()
-    //         }
-    //     }
-    //     (wall_geoms, baddie_geoms)
-    // }
+/// Map of EntityId to Geometry reference
+pub type GeomRefMap<'a> = HashMap<EntityId, &'a Geometry>;
 
-pub fn destructure_geom<'a>(entities: &'a Entities, geometries: &'a ObjectGeometries) -> (HashMap<EntityId, &'a Geometry>, HashMap<EntityId, &'a Geometry>) {
+pub fn destructure_geom<'a>(
+    entities: &'a Entities,
+    geometries: &'a ObjectGeometries,
+) -> (GeomRefMap<'a>, GeomRefMap<'a>, GeomRefMap<'a>) {
     let mut wall_geoms = HashMap::<EntityId, &Geometry>::new();
     let mut baddie_geoms = HashMap::<EntityId, &Geometry>::new();
+    let mut bullet_geoms = HashMap::<EntityId, &Geometry>::new();
     for (entity_id, geom) in geometries.iter() {
         let entity_id = *entity_id;
         let e = get_entity(entities, entity_id);
         match e.get_kind() {
-            EntityKind::Wall => { wall_geoms.insert(entity_id, geom); },
-            EntityKind::Baddie => { baddie_geoms.insert(entity_id, geom); },
-            _ => ()
+            EntityKind::Wall => {
+                wall_geoms.insert(entity_id, geom);
+            }
+            EntityKind::Baddie => {
+                baddie_geoms.insert(entity_id, geom);
+            }
+            EntityKind::Bullet => {
+                bullet_geoms.insert(entity_id, geom);
+            }
+            _ => (),
         }
     }
-    (wall_geoms, baddie_geoms)
+    (wall_geoms, baddie_geoms, bullet_geoms)
 }
 
 /// Updates box geometry according to its state
@@ -106,52 +105,28 @@ fn build_box_geometry(box_state: &Shape) -> [Vertex; 5] {
 /// Creates a cannon
 pub fn make_cannon(center: P) -> GameObject {
     const CANON_SIZE: u32 = 50;
-    let shape = Shape::new(
-        center,
-        CANON_SIZE,
-        (0, 0),
-        PI / 4.0,
-        0.0,
-    );
+    let shape = Shape::new(center, CANON_SIZE, (0, 0), PI / 4.0, 0.0);
     let geom = build_box_geometry(&shape);
     (Entity::new(EntityKind::Cannon), shape, geom)
 }
 
 /// Creates a bullet
 pub fn make_bullet(center: P, direction: Vector) -> GameObject {
-    let shape = Shape::new(
-        center,
-        100,
-        scale(direction, 1000),
-        0.0,
-        0.0,
-    );
+    let shape = Shape::new(center, 100, scale(direction, 1000), 0.0, 0.0);
     let geom = build_box_geometry(&shape);
     (Entity::new(EntityKind::Bullet), shape, geom)
 }
 
 pub fn make_baddie(start: P, vel: Vector, rotation_speed: f32) -> GameObject {
     const BADDIE_SIZE: u32 = 160;
-    let shape = Shape::new(
-        start,
-        BADDIE_SIZE,
-        vel,
-        0.0,
-        rotation_speed,
-    );
+    let shape = Shape::new(start, BADDIE_SIZE, vel, 0.0, rotation_speed);
     let geom = build_box_geometry(&shape);
     (Entity::new(EntityKind::Baddie), shape, geom)
 }
 
 pub fn make_wall(center: P) -> GameObject {
     const WALL_SIZE: u32 = 200;
-    let shape = Shape::new(
-        center,
-        WALL_SIZE,
-        (0, 0),
-        0.0,
-        0.0,
-    );
+    let shape = Shape::new(center, WALL_SIZE, (0, 0), 0.0, 0.0);
     let geom = build_box_geometry(&shape);
     (Entity::new(EntityKind::Wall), shape, geom)
 }

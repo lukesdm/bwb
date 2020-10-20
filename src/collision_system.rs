@@ -63,52 +63,57 @@ fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
     (object_map, object_index)
 }
 
-// Needs to be a Trait alias, which only exist in rustc-unstable
-//type CollisionHandler = FnMut(EntityId, EntityId) -> ();
+type CollisionHandler<'a> = Box<dyn 'a + FnMut(EntityId, EntityId) -> ()>;
 
 /// Detects collisions and runs handlers as appropriate
-pub struct CollisionSystem<THandler>
-where
-    THandler: FnMut(EntityId, EntityId) -> (),
-{
-    //where THandler: Fn(Wall, Baddie) -> () {
-    // bullet_map: SpatialMap,
-    // bullet_index: SpatialIndex,
+pub struct CollisionSystem<'a> {
     wall_map: SpatialMap,
     wall_index: SpatialIndex,
     baddie_map: SpatialMap,
     baddie_index: SpatialIndex,
-    handler: THandler,
+    bullet_map: SpatialMap,
+    bullet_index: SpatialIndex,
+    baddie_wall_handler: CollisionHandler<'a>,
+    bullet_wall_handler: CollisionHandler<'a>,
 }
 
-impl<THandler> CollisionSystem<THandler>
-where
-    THandler: FnMut(EntityId, EntityId) -> (),
-{
-    pub fn new(walls: &ObjectGeometries, baddies: &ObjectGeometries, handler: THandler) -> Self {
+impl<'a> CollisionSystem<'a> {
+    pub fn new(
+        walls: &ObjectGeometries,
+        baddies: &ObjectGeometries,
+        bullets: &ObjectGeometries,
+        baddie_wall_handler: CollisionHandler<'a>,
+        bullet_wall_handler: CollisionHandler<'a>,
+    ) -> Self {
         // build hashmaps from object geometries
 
-        // let bullet_map = 0;
-        // let bullet_index = 0;
         let (wall_map, wall_index) = build_map(walls);
         let (baddie_map, baddie_index) = build_map(baddies);
+        let (bullet_map, bullet_index) = build_map(bullets);
 
         Self {
-            // bullet_map,
-            // bullet_index,
             wall_map,
             wall_index,
             baddie_map,
             baddie_index,
-            handler,
+            bullet_map,
+            bullet_index,
+            baddie_wall_handler,
+            bullet_wall_handler,
         }
     }
 
     /// Check collisions and run appropriate handlers
     // TODO: Handle geometry spanning multiple bins
-    pub fn process(&mut self, walls: &ObjectGeometries, baddies: &ObjectGeometries) {
+    pub fn process(
+        &mut self, // TODO: Check - needs to be mutable?
+        walls: &ObjectGeometries,
+        baddies: &ObjectGeometries,
+        bullets: &ObjectGeometries,
+    ) {
         let bin_count = 100; // TODO: Calculate
         for i in 0..bin_count {
+            // Walls-Baddies
             if let Some(wall_ids) = self.wall_map.get(&i) {
                 if let Some(baddie_ids) = self.baddie_map.get(&i) {
                     for wall_id in wall_ids {
@@ -116,7 +121,22 @@ where
                             let wall_geom = walls.get(wall_id).unwrap();
                             let baddie_geom = baddies.get(baddie_id).unwrap();
                             if is_collision(*wall_geom, *baddie_geom) {
-                                (self.handler)(*wall_id, *baddie_id);
+                                (self.baddie_wall_handler)(*baddie_id, *wall_id);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bullets-Walls
+            if let Some(bullet_ids) = self.bullet_map.get(&i) {
+                for bullet_id in bullet_ids {
+                    if let Some(wall_ids) = self.wall_map.get(&i) {
+                        for wall_id in wall_ids {
+                            let bullet_geom = bullets.get(bullet_id).unwrap();
+                            let wall_geom = walls.get(wall_id).unwrap();
+                            if is_collision(*bullet_geom, *wall_geom) {
+                                (self.bullet_wall_handler)(*bullet_id, *wall_id)
                             }
                         }
                     }
@@ -188,23 +208,31 @@ mod tests {
         .iter()
         .cloned()
         .collect();
-        let handler = |wall_id: EntityId, baddie_id: EntityId| {
+        let baddie_wall_handler = |baddie_id: EntityId, wall_id: EntityId| {
             // Assert - handler called with correct arguments
             assert!(
                 (wall_id == wall1.get_id() && baddie_id == baddie1.get_id())
                     && !(baddie_id == baddie2.get_id() || wall_id == wall2.get_id())
             )
         };
-        let mut collision_system = CollisionSystem::new(&walls_geoms, &baddies_geoms, handler);
+        let dummy_geoms = &ObjectGeometries::new();
+        let dummy_handler = |_: EntityId, _: EntityId| ();
+        let mut collision_system = CollisionSystem::new(
+            &walls_geoms,
+            &baddies_geoms,
+            &dummy_geoms,
+            Box::new(baddie_wall_handler),
+            Box::new(dummy_handler),
+        );
         // Act
-        collision_system.process(&walls_geoms, &baddies_geoms);
+        collision_system.process(&walls_geoms, &baddies_geoms, &dummy_geoms);
 
         // Assert - see handler, above
     }
 
     #[test]
-    fn collision_reverse_baddie() {
-        // Arrange - 1 wall, 1 baddies, colliding, plus associated handler
+    fn collision_can_mutate_baddie() {
+        // Arrange - 1 wall, 1 baddies, colliding, plus associated baddie_wall_handler
         let (wall, _, wall_geom) = make_wall((1200, 1200));
         let walls_geoms: ObjectGeometries = [(wall.get_id(), &wall_geom)].iter().cloned().collect();
 
@@ -212,14 +240,25 @@ mod tests {
         let baddies_geoms: ObjectGeometries =
             [(baddie.get_id(), &baddie_geom)].iter().cloned().collect();
 
-        let handler = |wall_id: EntityId, baddie_id: EntityId| {
+        let baddie_wall_handler = |baddie_id: EntityId, wall_id: EntityId| {
             assert_eq!(wall_id, wall.get_id());
             assert_eq!(baddie_id, baddie.get_id());
             baddie_shape.reverse();
         };
-        let mut collision_system = CollisionSystem::new(&walls_geoms, &baddies_geoms, handler);
-        // Act
-        collision_system.process(&walls_geoms, &baddies_geoms);
+        let dummy_geoms = &ObjectGeometries::new();
+        let dummy_handler = |_: EntityId, _: EntityId| ();
+        // Scope needed here for collision system - need to return borrowed references before assert
+        {
+            let mut collision_system = CollisionSystem::new(
+                &walls_geoms,
+                &baddies_geoms,
+                &dummy_geoms,
+                Box::new(baddie_wall_handler),
+                Box::new(dummy_handler),
+            );
+            // Act
+            collision_system.process(&walls_geoms, &baddies_geoms, &dummy_geoms);
+        }
 
         // Assert
         assert_eq!(*baddie_shape.get_vel(), (-1000, 0));

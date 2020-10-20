@@ -9,26 +9,25 @@
 //! * Enemies wrap to the other side of the screen
 
 // TODO: Refactor - some stuff should live elsewhere
-use crate::geometry::{is_collision, rotate, scale, Geometry, Vector, Vertex, P, Direction, direction_vector};
+use crate::collision_system::CollisionSystem;
+use crate::entity::{Entity, EntityId, EntityKind};
+use crate::geometry::{
+    direction_vector, is_collision, rotate, scale, Direction, Geometry, Vector, Vertex, P,
+};
+use crate::shape::Shape;
+use crate::world;
+use crate::world::{make_bullet, update_geometry, Entities, ObjectGeometries, Shapes, World};
+use std::collections::{HashMap, HashSet};
 use std::f32::consts::PI;
 use std::time::{Duration, Instant};
-use std::collections::HashMap;
-use crate::shape::Shape;
-use crate::entity::{EntityKind, Entity, EntityId};
-use crate::world;
-use crate::world::{World, ObjectGeometries, make_bullet, update_geometry};
-use crate::collision_system::CollisionSystem;
 
 // World coordinate bounds
 pub const GRID_WIDTH: u32 = 10000;
 pub const GRID_HEIGHT: u32 = 10000;
 
-
-
-
-
 fn get_cannon(world: &World) -> &Entity {
-    world.0
+    world
+        .0
         .iter()
         .find(|e| *e.get_kind() == EntityKind::Cannon)
         .unwrap()
@@ -36,20 +35,14 @@ fn get_cannon(world: &World) -> &Entity {
 
 fn get_cannon_pos(world: &World) -> &P {
     let cannon_id = get_cannon(world).get_id();
-    world.1.get(&cannon_id).unwrap()
-        .get_center()
+    world.1.get(&cannon_id).unwrap().get_center()
 }
 
 // (ACTION)
 /// Try fire the cannon, throttled to the rate of fire.
 /// Returns the instant of when the cannon was previously fired successfully.  
 /// Note: Rate of fire is hardcoded within.  
-pub fn try_fire(
-    now: Instant,
-    prev: Instant,
-    world: &mut World,
-    direction: Direction,
-) -> Instant {
+pub fn try_fire(now: Instant, prev: Instant, world: &mut World, direction: Direction) -> Instant {
     // 1 / rate of fire
     const RELOAD_TIME: Duration = Duration::from_millis(1000);
 
@@ -134,37 +127,25 @@ fn is_inside_world(point: P) -> bool {
 }
 
 /// Handle when bullets miss i.e. reach edge of world without hitting anything - remove them.
-fn handle_bullet_misses(mut world: World) -> World {
-//fn handle_bullet_misses(bullets: &mut Vec<Bullet>) {
-    let bullets = world.0.iter()
+fn handle_bullet_misses(world: &mut World) {
+    //fn handle_bullet_misses(bullets: &mut Vec<Bullet>) {
+    let bullets = world
+        .0
+        .iter()
         .filter(|e| *e.get_kind() == EntityKind::Bullet);
 
-    let to_remove: Vec<EntityId> = bullets.filter(|b| {
-        let shape = world.1.get(&b.get_id()).unwrap();
-        !is_inside_world(*shape.get_center())
-    }).map(|b| b.get_id())
-    .collect();
+    let to_remove: Vec<EntityId> = bullets
+        .filter(|b| {
+            let shape = world.1.get(&b.get_id()).unwrap();
+            !is_inside_world(*shape.get_center())
+        })
+        .map(|b| b.get_id())
+        .collect();
 
     for b in to_remove {
-        world::remove(&mut world, b);
+        world::remove(world, b);
     }
-
-    world
 }
-
-// TODO: Reimplement
-/// Reverse baddies when they hit a wall
-// fn handle_wall_collisions(walls: &Vec<Wall>, baddies: &mut Vec<Baddie>) {
-//     for wall in walls {
-//         for baddie in baddies.iter_mut() {
-//             if is_collision(&wall.0.geometry, &baddie.0.geometry) {
-//                 let (vx, vy) = baddie.0.state.vel;
-//                 // Reverse the velocity vector. COULDDO: Reflect rather than reverse
-//                 baddie.0.state.vel = (-vx, -vy);
-//             }
-//         }
-//     }
-// }
 
 // TODO: Reimplement
 // fn handle_bullet_wall_collisions(bullets: &mut Vec<Bullet>, walls: &Vec<Wall>) {
@@ -186,20 +167,34 @@ fn handle_bullet_misses(mut world: World) -> World {
 //     }
 // }
 
-// fn destructure_geom<'a>(world: &'a World) -> (HashMap<EntityId, &'a Geometry>, HashMap<EntityId, &'a Geometry>) {
-//     let mut wall_geoms = HashMap::<EntityId, &Geometry>::new();
-//     let mut baddie_geoms = HashMap::<EntityId, &Geometry>::new();
-//     for (entity_id, geom) in world.geometries.iter() {
-//         let entity_id = *entity_id;
-//         let e = world.get_entity(entity_id);
-//         match e.get_kind() {
-//             EntityKind::Wall => { wall_geoms.insert(entity_id, geom); },
-//             EntityKind::Baddie => { baddie_geoms.insert(entity_id, geom); },
-//             _ => ()
-//         }
-//     }
-//     (wall_geoms, baddie_geoms)
-// }
+fn handle_collisions(
+    entities: &Entities,
+    shapes: &mut Shapes,
+    geometries: &ObjectGeometries,
+) -> HashSet<EntityId> {
+    let mut to_remove = HashSet::<EntityId>::new();
+    {
+        let baddie_wall_handler = |baddie_id: EntityId, _wall_id: EntityId| {
+            shapes.get_mut(&baddie_id).unwrap().reverse();
+        };
+
+        let bullet_wall_handler = |bullet_id: EntityId, _wall_id: EntityId| {
+            to_remove.insert(bullet_id);
+        };
+        let (wall_geoms, baddie_geoms, bullet_geoms) =
+            world::destructure_geom(&entities, &geometries);
+
+        let mut collision_system = CollisionSystem::new(
+            &wall_geoms,
+            &baddie_geoms,
+            &bullet_geoms,
+            Box::new(baddie_wall_handler),
+            Box::new(bullet_wall_handler),
+        );
+        collision_system.process(&wall_geoms, &baddie_geoms, &bullet_geoms);
+    }
+    to_remove
+}
 
 pub fn update_world(mut world: World, dt: i32) -> World {
     //let (entities, shapes, geometries) = world;
@@ -209,35 +204,33 @@ pub fn update_world(mut world: World, dt: i32) -> World {
             EntityKind::Baddie => update_pos(shape, dt, true),
             EntityKind::Cannon => update_pos(shape, dt, true),
             EntityKind::Bullet => update_pos(shape, dt, false),
-            EntityKind:: Wall => update_pos(shape, dt, false),
-            _ => ()
+            EntityKind::Wall => update_pos(shape, dt, false),
+            _ => (),
         }
     }
 
     // Update geometry ready for collision detection
     //let geometries = world.geometries;
-    
     for (id, shape) in world.1.iter() {
         let geometry = world.2.get_mut(&id).unwrap();
         update_geometry(geometry, shape);
     }
-    
 
     // TODO: Reimplment
     //handle_bullet_hits(&mut game_objects.bullets, &mut game_objects.baddies);
-    let (entities, mut shapes, geometries) = handle_bullet_misses(world);
+    let to_remove; // = HashSet::<EntityId>::new();
+    handle_bullet_misses(&mut world);
+    let (entities, mut shapes, geometries) = world;
+    to_remove = handle_collisions(&entities, &mut shapes, &geometries);
 
-    // Baddie-wall collisions
-    let baddie_wall_handler = |_wall_id: EntityId, baddie_id: EntityId| {
-        shapes.get_mut(&baddie_id).unwrap()
-        .reverse();
-    };
-    
-    let (wall_geoms, baddie_geoms) = world::destructure_geom(&entities, &geometries);
-    
-    let mut collision_system = CollisionSystem::new(&wall_geoms, &baddie_geoms, baddie_wall_handler);
-    collision_system.process(&wall_geoms, &baddie_geoms);
-    (entities, shapes, geometries)
+    world = (entities, shapes, geometries);
+    for b in to_remove {
+        world::remove(&mut world, b);
+    }
+
+    world
+
+    //(entities, shapes, geometries)
 
     // TODO: Reimplment
     //handle_bullet_wall_collisions(&mut game_objects.bullets, &game_objects.walls);
