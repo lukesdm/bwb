@@ -75,6 +75,7 @@ pub struct CollisionSystem<'a> {
     bullet_index: SpatialIndex,
     baddie_wall_handler: CollisionHandler<'a>,
     bullet_wall_handler: CollisionHandler<'a>,
+    bullet_baddie_handler: CollisionHandler<'a>,
 }
 
 impl<'a> CollisionSystem<'a> {
@@ -84,6 +85,7 @@ impl<'a> CollisionSystem<'a> {
         bullets: &ObjectGeometries,
         baddie_wall_handler: CollisionHandler<'a>,
         bullet_wall_handler: CollisionHandler<'a>,
+        bullet_baddie_handler: CollisionHandler<'a>,
     ) -> Self {
         // build hashmaps from object geometries
 
@@ -100,6 +102,7 @@ impl<'a> CollisionSystem<'a> {
             bullet_index,
             baddie_wall_handler,
             bullet_wall_handler,
+            bullet_baddie_handler,
         }
     }
 
@@ -113,7 +116,7 @@ impl<'a> CollisionSystem<'a> {
     ) {
         let bin_count = 100; // TODO: Calculate
         for i in 0..bin_count {
-            // Walls-Baddies
+            // Walls vs Baddies
             if let Some(wall_ids) = self.wall_map.get(&i) {
                 if let Some(baddie_ids) = self.baddie_map.get(&i) {
                     for wall_id in wall_ids {
@@ -128,15 +131,27 @@ impl<'a> CollisionSystem<'a> {
                 }
             }
 
-            // Bullets-Walls
+            // Bullets...
             if let Some(bullet_ids) = self.bullet_map.get(&i) {
                 for bullet_id in bullet_ids {
+                    // ... vs Walls
                     if let Some(wall_ids) = self.wall_map.get(&i) {
                         for wall_id in wall_ids {
                             let bullet_geom = bullets.get(bullet_id).unwrap();
                             let wall_geom = walls.get(wall_id).unwrap();
                             if is_collision(*bullet_geom, *wall_geom) {
                                 (self.bullet_wall_handler)(*bullet_id, *wall_id)
+                            }
+                        }
+                    }
+
+                    // ... vs Baddies
+                    if let Some(baddie_ids) = self.baddie_map.get(&i) {
+                        for baddie_id in baddie_ids {
+                            let bullet_geom = bullets.get(bullet_id).unwrap();
+                            let baddie_geom = baddies.get(baddie_id).unwrap();
+                            if is_collision(*bullet_geom, *baddie_geom) {
+                                (self.bullet_baddie_handler)(*bullet_id, *baddie_id)
                             }
                         }
                     }
@@ -223,6 +238,7 @@ mod tests {
             &dummy_geoms,
             Box::new(baddie_wall_handler),
             Box::new(dummy_handler),
+            Box::new(dummy_handler),
         );
         // Act
         collision_system.process(&walls_geoms, &baddies_geoms, &dummy_geoms);
@@ -254,6 +270,7 @@ mod tests {
                 &baddies_geoms,
                 &dummy_geoms,
                 Box::new(baddie_wall_handler),
+                Box::new(dummy_handler),
                 Box::new(dummy_handler),
             );
             // Act

@@ -97,30 +97,6 @@ fn update_pos(box_state: &mut Shape, dt: i32, wrap: bool) {
     box_state.rotate(dt as f32 / 1000.0);
 }
 
-// TODO: Reimplement
-// fn handle_bullet_hits(bullets: &mut Vec<Bullet>, baddies: &mut Vec<Baddie>) {
-//     // On collision, remove the bullet and the baddie, and resume with the other bullets, i.e. don't allow one bullet to destroy multiple baddies.
-//     // Use while loop as we want to re-evaluate len() every loop. (for loop evals once - SHOULDDO: check that)
-//     let mut i_bullet = 0;
-//     while i_bullet < bullets.len() && !baddies.is_empty() {
-//         let mut collided = false;
-//         for i_baddie in 0..baddies.len() {
-//             // can use a for loop here as we break out once the length has changed.
-//             if is_collision(&bullets[i_bullet].0.geometry, &baddies[i_baddie].0.geometry) {
-//                 baddies.swap_remove(i_baddie);
-//                 bullets.swap_remove(i_bullet);
-//                 collided = true;
-//                 break;
-//             }
-//         }
-//         if !collided {
-//             i_bullet += 1;
-//         } else {
-//             // NOP - Don't increment, as the item at this index has changed, and we want to check it at the next iteration.
-//         }
-//     }
-// }
-
 fn is_inside_world(point: P) -> bool {
     let (x, y) = point;
     (x > 0 && x <= GRID_WIDTH as i32) && (y > 0 && y <= GRID_HEIGHT as i32)
@@ -128,7 +104,6 @@ fn is_inside_world(point: P) -> bool {
 
 /// Handle when bullets miss i.e. reach edge of world without hitting anything - remove them.
 fn handle_bullet_misses(world: &mut World) {
-    //fn handle_bullet_misses(bullets: &mut Vec<Bullet>) {
     let bullets = world
         .0
         .iter()
@@ -147,32 +122,13 @@ fn handle_bullet_misses(world: &mut World) {
     }
 }
 
-// TODO: Reimplement
-// fn handle_bullet_wall_collisions(bullets: &mut Vec<Bullet>, walls: &Vec<Wall>) {
-//     let mut i_bullet = 0;
-//     while i_bullet < bullets.len() {
-//         let mut collided = false;
-//         for wall in walls {
-//             if is_collision(&bullets[i_bullet].0.geometry, &wall.0.geometry) {
-//                 bullets.swap_remove(i_bullet);
-//                 collided = true;
-//                 break;
-//             }
-//         }
-//         if !collided {
-//             i_bullet += 1;
-//         } else {
-//             // NOP - Don't increment, as the item at this index has changed, and we want to check it at the next iteration.
-//         }
-//     }
-// }
-
 fn handle_collisions(
     entities: &Entities,
     shapes: &mut Shapes,
     geometries: &ObjectGeometries,
-) -> HashSet<EntityId> {
+) -> (HashSet<EntityId>, HashSet<EntityId>) {
     let mut to_remove = HashSet::<EntityId>::new();
+    let mut to_remove2 = HashSet::<EntityId>::new();
     {
         let baddie_wall_handler = |baddie_id: EntityId, _wall_id: EntityId| {
             shapes.get_mut(&baddie_id).unwrap().reverse();
@@ -180,6 +136,11 @@ fn handle_collisions(
 
         let bullet_wall_handler = |bullet_id: EntityId, _wall_id: EntityId| {
             to_remove.insert(bullet_id);
+        };
+
+        let bullet_baddie_handler = |bullet_id: EntityId, baddie_id: EntityId| {
+            to_remove2.insert(bullet_id);
+            to_remove2.insert(baddie_id);
         };
         let (wall_geoms, baddie_geoms, bullet_geoms) =
             world::destructure_geom(&entities, &geometries);
@@ -190,14 +151,14 @@ fn handle_collisions(
             &bullet_geoms,
             Box::new(baddie_wall_handler),
             Box::new(bullet_wall_handler),
+            Box::new(bullet_baddie_handler),
         );
         collision_system.process(&wall_geoms, &baddie_geoms, &bullet_geoms);
     }
-    to_remove
+    (to_remove, to_remove2) // TODO: Union
 }
 
 pub fn update_world(mut world: World, dt: i32) -> World {
-    //let (entities, shapes, geometries) = world;
     for entity in world.0.iter() {
         let shape = world.1.get_mut(&entity.get_id()).unwrap();
         match entity.get_kind() {
@@ -216,24 +177,21 @@ pub fn update_world(mut world: World, dt: i32) -> World {
         update_geometry(geometry, shape);
     }
 
-    // TODO: Reimplment
-    //handle_bullet_hits(&mut game_objects.bullets, &mut game_objects.baddies);
-    let to_remove; // = HashSet::<EntityId>::new();
     handle_bullet_misses(&mut world);
     let (entities, mut shapes, geometries) = world;
-    to_remove = handle_collisions(&entities, &mut shapes, &geometries);
+    let to_remove = handle_collisions(&entities, &mut shapes, &geometries);
 
     world = (entities, shapes, geometries);
-    for b in to_remove {
-        world::remove(&mut world, b);
+    for e in to_remove.0 {
+        world::remove(&mut world, e);
+    }
+
+    // TODO: Merge with above
+    for e in to_remove.1 {
+        world::remove(&mut world, e);
     }
 
     world
-
-    //(entities, shapes, geometries)
-
-    // TODO: Reimplment
-    //handle_bullet_wall_collisions(&mut game_objects.bullets, &game_objects.walls);
 
     // Could add 2nd pass of geometry update to reflect destroyed objects.
     // Has side effect of showing objects inside one another, as positions aren't backed-out after collision.
