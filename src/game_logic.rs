@@ -11,14 +11,11 @@
 // TODO: Refactor - some stuff should live elsewhere
 use crate::collision_system::CollisionSystem;
 use crate::entity::{Entity, EntityId, EntityKind};
-use crate::geometry::{
-    direction_vector, is_collision, rotate, scale, Direction, Geometry, Vector, Vertex, P,
-};
+use crate::geometry::{direction_vector, Direction, P};
 use crate::shape::Shape;
 use crate::world;
 use crate::world::{make_bullet, update_geometry, Entities, ObjectGeometries, Shapes, World};
-use std::collections::{HashMap, HashSet};
-use std::f32::consts::PI;
+use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 // World coordinate bounds
@@ -126,9 +123,10 @@ fn handle_collisions(
     entities: &Entities,
     shapes: &mut Shapes,
     geometries: &ObjectGeometries,
-) -> (HashSet<EntityId>, HashSet<EntityId>) {
+) -> HashSet<EntityId> {
+    // Removal collections. Need a separate one for each closure, but they can be merged at the end.
     let mut to_remove = HashSet::<EntityId>::new();
-    let mut to_remove2 = HashSet::<EntityId>::new();
+    let mut to_remove_2 = HashSet::<EntityId>::new();
     {
         let baddie_wall_handler = |baddie_id: EntityId, _wall_id: EntityId| {
             shapes.get_mut(&baddie_id).unwrap().reverse();
@@ -139,8 +137,8 @@ fn handle_collisions(
         };
 
         let bullet_baddie_handler = |bullet_id: EntityId, baddie_id: EntityId| {
-            to_remove2.insert(bullet_id);
-            to_remove2.insert(baddie_id);
+            to_remove_2.insert(bullet_id);
+            to_remove_2.insert(baddie_id);
         };
         let (wall_geoms, baddie_geoms, bullet_geoms) =
             world::destructure_geom(&entities, &geometries);
@@ -155,7 +153,12 @@ fn handle_collisions(
         );
         collision_system.process(&wall_geoms, &baddie_geoms, &bullet_geoms);
     }
-    (to_remove, to_remove2) // TODO: Union
+    // Union both removal lists
+    for tr in to_remove_2 {
+        to_remove.insert(tr);
+    }
+
+    to_remove
 }
 
 pub fn update_world(mut world: World, dt: i32) -> World {
@@ -171,7 +174,6 @@ pub fn update_world(mut world: World, dt: i32) -> World {
     }
 
     // Update geometry ready for collision detection
-    //let geometries = world.geometries;
     for (id, shape) in world.1.iter() {
         let geometry = world.2.get_mut(&id).unwrap();
         update_geometry(geometry, shape);
@@ -182,12 +184,7 @@ pub fn update_world(mut world: World, dt: i32) -> World {
     let to_remove = handle_collisions(&entities, &mut shapes, &geometries);
 
     world = (entities, shapes, geometries);
-    for e in to_remove.0 {
-        world::remove(&mut world, e);
-    }
-
-    // TODO: Merge with above
-    for e in to_remove.1 {
+    for e in to_remove {
         world::remove(&mut world, e);
     }
 
