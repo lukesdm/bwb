@@ -25,10 +25,11 @@ use geometry::*;
 
 mod world;
 
+
 mod game_logic;
 use crate::entity::EntityKind;
 use crate::world::{
-    create_world, make_baddie, make_cannon, make_wall, Entities, GameObject, ObjectGeometries, World,
+    create_world, Entities, GameObject, ObjectFactory, ObjectGeometries, World,
 };
 use game_logic::*;
 use std::collections::HashMap;
@@ -84,7 +85,7 @@ fn render(canvas: &mut render::WindowCanvas, entities: &Entities, geometries: &O
     }
 }
 
-fn engine_run(mut world: World) {
+fn engine_run(mut world: World, obj_factory: &ObjectFactory) {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
@@ -118,14 +119,14 @@ fn engine_run(mut world: World) {
                     ..
                 } => {
                     prev_fire_time =
-                        try_fire(current_time, prev_fire_time, &mut world, Direction::Left)
+                        try_fire(current_time, prev_fire_time, &mut world, Direction::Left, obj_factory)
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Right),
                     ..
                 } => {
                     prev_fire_time =
-                        try_fire(current_time, prev_fire_time, &mut world, Direction::Right)
+                        try_fire(current_time, prev_fire_time, &mut world, Direction::Right, obj_factory)
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Up),
@@ -151,13 +152,13 @@ fn engine_run(mut world: World) {
     }
 }
 
-fn init_level() -> World {
+fn init_level(obj_factory: &ObjectFactory) -> World {
     let mut level_data = Vec::<GameObject>::new();
     const WALL_RATIO: u32 = 20; // % of generated entities that are walls.
     let seed: &[_] = &[1, 2, 3, 4];
     let mut rng: StdRng = SeedableRng::from_seed(seed);
     let mut next_random = |lower, upper| rng.gen_range(lower, upper + 1);
-    level_data.push(make_cannon((GRID_WIDTH as i32 / 2, GRID_HEIGHT as i32 / 2)));
+    level_data.push(obj_factory.make_cannon((GRID_WIDTH as i32 / 2, GRID_HEIGHT as i32 / 2)));
 
     let mut curr_y = 0;
     while curr_y < GRID_HEIGHT {
@@ -168,9 +169,9 @@ fn init_level() -> World {
             let x_inc = next_random(100, 1000); // TODO: Parameterize
             curr_x += x_inc as u32;
             if next_random(0, 100) < WALL_RATIO as i32 {
-                level_data.push(make_wall((curr_x as i32, curr_y as i32)));
+                level_data.push(obj_factory.make_wall((curr_x as i32, curr_y as i32)));
             } else {
-                level_data.push(make_baddie(
+                level_data.push(obj_factory.make_baddie(
                     (curr_x as i32, curr_y as i32),
                     (next_random(-100, 100), next_random(-100, 100)),
                     next_random(-100, 100) as f32 / 100.0,
@@ -182,25 +183,26 @@ fn init_level() -> World {
 }
 
 /// Hardcoded first level - TODO: add back in once level system implemented.
-fn init_level0() -> World {
+fn init_level0(obj_factory: ObjectFactory) -> World {
     let level_data: Vec<GameObject> = vec![
-        make_cannon((GRID_WIDTH as i32 / 2, GRID_HEIGHT as i32 / 2)),
-        make_wall((2500, 2500)),
-        make_wall((7500, 2500)),
-        make_wall((7500, 7500)),
-        make_wall((2500, 7500)),
-        make_baddie((1000, 1000), (100, 200), 0.5),
-        make_baddie((4000, 2000), (-200, 100), 0.5),
-        make_baddie((6000, 500), (200, 75), 0.5),
-        make_baddie((2000, 6000), (100, -200), 0.5),
-        make_baddie((1500, 9000), (200, 0), 0.5),
-        make_baddie((6500, 7500), (50, -200), 0.5),
+        obj_factory.make_cannon((GRID_WIDTH as i32 / 2, GRID_HEIGHT as i32 / 2)),
+        obj_factory.make_wall((2500, 2500)),
+        obj_factory.make_wall((7500, 2500)),
+        obj_factory.make_wall((7500, 7500)),
+        obj_factory.make_wall((2500, 7500)),
+        obj_factory.make_baddie((1000, 1000), (100, 200), 0.5),
+        obj_factory.make_baddie((4000, 2000), (-200, 100), 0.5),
+        obj_factory.make_baddie((6000, 500), (200, 75), 0.5),
+        obj_factory.make_baddie((2000, 6000), (100, -200), 0.5),
+        obj_factory.make_baddie((1500, 9000), (200, 0), 0.5),
+        obj_factory.make_baddie((6500, 7500), (50, -200), 0.5),
     ];
 
     create_world(level_data)
 }
 
 pub fn main() {
-    let world = init_level();
-    engine_run(world);
+    let obj_factory = ObjectFactory::new(400);
+    let world = init_level(&obj_factory);
+    engine_run(world, &obj_factory);
 }

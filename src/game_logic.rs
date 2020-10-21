@@ -14,7 +14,7 @@ use crate::entity::{Entity, EntityId, EntityKind};
 use crate::geometry::{direction_vector, Direction, P};
 use crate::shape::Shape;
 use crate::world;
-use crate::world::{make_bullet, update_geometry, Entities, ObjectGeometries, Shapes, World};
+use crate::world::{update_geometry, Entities, ObjectGeometries, Shapes, World};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
@@ -39,15 +39,24 @@ fn get_cannon_pos(world: &World) -> &P {
 /// Try fire the cannon, throttled to the rate of fire.
 /// Returns the instant of when the cannon was previously fired successfully.  
 /// Note: Rate of fire is hardcoded within.  
-pub fn try_fire(now: Instant, prev: Instant, world: &mut World, direction: Direction) -> Instant {
+pub fn try_fire(
+    now: Instant,
+    prev: Instant,
+    world: &mut World,
+    direction: Direction,
+    obj_factory: &world::ObjectFactory,
+) -> Instant {
     // 1 / rate of fire
     const RELOAD_TIME: Duration = Duration::from_millis(1000);
 
     let cannon_pos = *get_cannon_pos(world);
 
     if now > prev + RELOAD_TIME {
-        world::add(world, make_bullet(cannon_pos, direction_vector(direction)));
-        //fire(cannon, bullets, direction);
+        // Fire!!
+        world::add(
+            world,
+            obj_factory.make_bullet(cannon_pos, direction_vector(direction)),
+        );
         return now;
     }
     return prev;
@@ -195,148 +204,131 @@ pub fn update_world(mut world: World, dt: i32) -> World {
     // update_geometry_all(game_objects);
 }
 
-// TODO: Fix tests
-// #[cfg(test)]
-// mod tests {
-//     use super::{update_world, Baddie, Bullet, Cannon, GameObject, Shape, Wall, World, GRID_WIDTH};
-//     #[test]
-//     fn bullet_meets_enemy_both_destroyed() {
-//         // Arrange
-//         // 2 different bullets, 2 different baddies, and 1 of each about to collide
-//         let hit_baddie = Baddie(GameObject::new(Shape::new(
-//             (5000, 5000),
-//             1000,
-//             (0, 0),
-//             0.0,
-//             0.0,
-//         )));
-//         let missed_baddie = Baddie(GameObject::new(Shape::new(
-//             (5000, 7000),
-//             1000,
-//             (0, 0),
-//             0.0,
-//             0.0,
-//         )));
-//
-//         let hitting_bullet = Bullet(GameObject::new(Shape::new(
-//             (4490, 4500),
-//             100,
-//             (1000, 0),
-//             0.0,
-//             0.0,
-//         )));
-//         let missing_bullet = Bullet(GameObject::new(Shape::new(
-//             (4000, 4500),
-//             100,
-//             (0, 1000),
-//             0.0,
-//             0.0,
-//         )));
-//
-//         let dt = 20; // simulate 20ms
-//
-//         let mut world = World {
-//             cannon: Cannon::new((0, 0)), // dummy - not used here
-//             bullets: vec![hitting_bullet, missing_bullet],
-//             baddies: vec![hit_baddie, missed_baddie],
-//             walls: vec![],
-//         };
-//
-//         // Act
-//         update_world(&mut world, dt);
-//
-//         // Assert
-//         assert_eq!(world.bullets.len(), 1);
-//         assert_eq!(world.baddies.len(), 1);
-//         // Could add more precise assertion to determine that the expected objects were destroyed but that involves lots of boilerplate.
-//     }
-//
-//     #[test]
-//     fn bullet_destroyed_at_screen_edge() {
-//         let mut world = World {
-//             cannon: Cannon::new((0, 0)), // dummy - not used here
-//             bullets: vec![Bullet::new((GRID_WIDTH as i32 - 10, 100), (1, 0))],
-//             baddies: vec![],
-//             walls: vec![],
-//         };
-//         let dt = 20;
-//
-//         assert_eq!(world.bullets.len(), 1);
-//
-//         update_world(&mut world, dt);
-//
-//         assert_eq!(world.bullets.len(), 0);
-//     }
-//
-//     #[test]
-//     fn baddies_wrap_at_screen_edge_lr() {
-//         let mut world = World::new(
-//             Cannon::new((0, 0)),
-//             vec![Baddie::new((GRID_WIDTH as i32 - 10, 1000), (1000, 0), 0.0)],
-//             vec![],
-//         );
-//         let dt = 20;
-//         let new_center_expected = (10, 1000);
-//
-//         update_world(&mut world, dt);
-//
-//         let new_center_actual = world.baddies[0].0.state.center;
-//         assert_eq!(new_center_actual, new_center_expected);
-//     }
-//
-//     #[test]
-//     fn baddies_wrap_at_screen_edge_rl() {
-//         let mut world = World::new(
-//             Cannon::new((0, 0)), // don't care
-//             vec![Baddie::new((10, 1000), (-1000, 0), 0.0)],
-//             vec![],
-//         );
-//         let dt = 20;
-//         let new_center_expected = (GRID_WIDTH as i32 - 10, 1000);
-//
-//         update_world(&mut world, dt);
-//
-//         let new_center_actual = world.baddies[0].0.state.center;
-//         assert_eq!(new_center_actual, new_center_expected);
-//     }
-//
-//     #[test]
-//     fn baddies_bounce_off_walls() {
-//         let mut world = World::new(
-//             Cannon::new((0, 0)),                             // don't care
-//             vec![Baddie::new((1000, 1000), (1000, 0), 0.0)], // assume size 750 => right edge is at x=1375
-//             vec![Wall::new((1900, 1000))],
-//         ); // assume size is 1000 => left edge is at 1400
-//         let dt = 100;
-//         //// Expect baddie to travel 25 to the wall, and then be reversed. Doesn't need to be exact so just check the velocity is reversed.
-//
-//         // println!("Wall geometry: {:?}", world.walls[0].0.geometry);
-//         // println!("Baddie before: {:?}", world.baddies[0].0.geometry);
-//
-//         update_world(&mut world, dt);
-//
-//         //println!("Baddie after: {:?}", world.baddies[0].0.geometry);
-//
-//         assert_eq!(world.baddies[0].0.state.vel, (-1000, 0));
-//     }
-//
-//     // COULDDO: Test bounce + wrap
-//
-//     #[test]
-//     fn bullet_destroyed_by_wall() {
-//         // Arrange
-//         let mut world = World {
-//             cannon: Cannon::new((0, 0)),                      // dummy - not used here
-//             bullets: vec![Bullet::new((1340, 1000), (1, 0))], // assume size is 100 => right edge is at 1390. Also, speed is 1000U/sec
-//             baddies: vec![],
-//             walls: vec![Wall::new((1900, 1000))], // assume size is 1000 => left edge is at 1400
-//         };
-//         let dt = 20;
-//
-//         // Act
-//         update_world(&mut world, dt);
-//
-//         // Assert
-//         assert_eq!(world.bullets.len(), 0);
-//     }
-// }
+/// Game logic tests. Note: These are currently integration tests, rather than unit tests.
+#[cfg(test)]
+mod tests {
+    use super::{update_world, GRID_WIDTH};
+    use crate::entity::Entity;
+    use crate::world;
+    #[test]
+    fn bullet_meets_enemy_both_destroyed() {
+        // Arrange
+        // 2 different bullets, 2 different baddies, and 1 of each about to collide
+        let obj_factory = world::ObjectFactory::new(1000);
+        let hit_baddie = obj_factory.make_baddie((5500, 5000), (0, 0), 0.0);
+        let missed_baddie = obj_factory.make_baddie((5000, 7000), (0, 0), 0.0);
+        let expected_id_1 = missed_baddie.0.get_id();
+
+        // Assume baddie size is 750 => left edge at 5500 - 750 / 2 = 5525
+        let hitting_bullet = obj_factory.make_bullet((5115, 5000), (1, 0));
+        let missing_bullet = obj_factory.make_bullet((4000, 4500), (0, 1));
+        let expected_id_2 = missing_bullet.0.get_id();
+
+        // simulate 20ms
+        let dt = 20;
+
+        let world = world::create_world(vec![
+            hit_baddie,
+            missed_baddie,
+            hitting_bullet,
+            missing_bullet,
+        ]);
+
+        // Act
+        let (entities, _, _) = update_world(world, dt);
+
+        // Assert
+        assert_eq!(entities.len(), 2);
+        assert!(entities.contains(&Entity::from_id(expected_id_1)));
+        assert!(entities.contains(&Entity::from_id(expected_id_2)));
+
+        // TODO: Test case as below, as currently collision detection is too rough to detect correctly (hashing on center only):
+        //let hit_baddie = obj_factory.make_baddie((5000, 5000), (0, 0), 0.0);
+        //let hitting_bullet = obj_factory.make_bullet((4615, 5000), (1, 0));
+    }
+
+    #[test]
+    fn bullet_destroyed_at_screen_edge() {
+        let obj_factory = world::ObjectFactory::new(1000);
+        let world = world::create_world(vec![
+            obj_factory.make_bullet((GRID_WIDTH as i32 - 10, 100), (1, 0))
+        ]);
+        let dt = 20;
+
+        let (entities, _, _) = update_world(world, dt);
+
+        assert_eq!(entities.len(), 0);
+    }
+
+    #[test]
+    fn baddies_wrap_at_screen_edge_lr() {
+        let obj_factory = world::ObjectFactory::new(1000);
+        let baddie = obj_factory.make_baddie((GRID_WIDTH as i32 - 10, 1000), (1000, 0), 0.0);
+        let baddie_id = baddie.0.get_id();
+        let world = world::create_world(vec![baddie]);
+        let dt = 20;
+        let new_center_expected = (10, 1000);
+
+        let (_, shapes, _) = update_world(world, dt);
+
+        let new_center_actual = shapes.get(&baddie_id).unwrap().get_center();
+        assert_eq!(*new_center_actual, new_center_expected);
+    }
+
+    #[test]
+    fn baddies_wrap_at_screen_edge_rl() {
+        let obj_factory = world::ObjectFactory::new(1000);
+        let baddie = obj_factory.make_baddie((10, 1000), (-1000, 0), 0.0);
+        let baddie_id = baddie.0.get_id();
+        let world = world::create_world(vec![baddie]);
+        let dt = 20;
+        let new_center_expected = (GRID_WIDTH as i32 - 10, 1000);
+
+        let (_, shapes, _) = update_world(world, dt);
+
+        let new_center_actual = shapes.get(&baddie_id).unwrap().get_center();
+        assert_eq!(*new_center_actual, new_center_expected);
+    }
+
+    #[test]
+    fn baddies_bounce_off_walls() {
+        let obj_factory = world::ObjectFactory::new(1000);
+        let baddie = obj_factory.make_baddie((1000, 1000), (1000, 0), 0.0); // assume size 750 => right edge is at x=1375
+        let baddie_id = baddie.0.get_id();
+        let wall = obj_factory.make_wall((1900, 1000)); // assume size is 1000 => left edge is at 1400
+        let world = world::create_world(vec![baddie, wall]);
+        let dt = 100;
+        // Expect baddie to travel 25 to the wall, and then be reversed. Doesn't need to be exact so just check the velocity is reversed.
+
+        // Act
+        let (_, shapes, _) = update_world(world, dt);
+
+        // Assert
+        let new_vel = *shapes.get(&baddie_id).unwrap().get_vel();
+        assert_eq!(new_vel, (-1000, 0));
+    }
+
+    // // COULDDO: Test bounce + wrap
+
+    #[test]
+    fn bullet_destroyed_by_wall() {
+        // Arrange
+        let obj_factory = world::ObjectFactory::new(1000);
+
+        // assume size is 100 => right edge is at 1390. Also, speed is 1000U/sec
+        let bullet = obj_factory.make_bullet((1340, 1000), (1, 0));
+        let bullet_id = bullet.0.get_id();
+        // assume size is 1000 => left edge is at 1400
+        let wall = obj_factory.make_wall((1900, 1000));
+        let world = world::create_world(vec![bullet, wall]);
+
+        let dt = 20;
+
+        // Act
+        let (entities, _, _) = update_world(world, dt);
+
+        // Assert
+        assert_eq!(entities.len(), 1);
+        assert!(entities.contains(&Entity::from_id(bullet_id)) == false);
+    }
+}

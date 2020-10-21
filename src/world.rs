@@ -102,31 +102,55 @@ fn build_box_geometry(box_state: &Shape) -> [Vertex; 5] {
     vertices
 }
 
-/// Creates a cannon
-pub fn make_cannon(center: P) -> GameObject {
-    const CANON_SIZE: u32 = 50;
-    let shape = Shape::new(center, CANON_SIZE, (0, 0), PI / 4.0, 0.0);
-    let geom = build_box_geometry(&shape);
-    (Entity::new(EntityKind::Cannon), shape, geom)
+const BADDIE_SIZE: f32 = 0.75;
+const WALL_SIZE: f32 = 1.0;
+const BULLET_SIZE: f32 = 0.1;
+const CANNON_SIZE: f32 = 0.2;
+const BULLET_SPEED: i32 = 1000;
+
+/// Factory for creating the various kinds of game objects
+pub struct ObjectFactory {
+    base_size: u32,
 }
 
-/// Creates a bullet
-pub fn make_bullet(center: P, direction: Vector) -> GameObject {
-    let shape = Shape::new(center, 100, scale(direction, 1000), 0.0, 0.0);
-    let geom = build_box_geometry(&shape);
-    (Entity::new(EntityKind::Bullet), shape, geom)
-}
+impl ObjectFactory {
+    /// Creates a new `ObjectFactory` with the given base size.
+    pub fn new(base_size: u32) -> Self {
+        Self { base_size }
+    }
+    /// Creates a cannon
+    pub fn make_cannon(&self, center: P) -> GameObject {
+        let shape = Shape::new(center, self.calc_size(CANNON_SIZE), (0, 0), PI / 4.0, 0.0);
+        let geom = build_box_geometry(&shape);
+        (Entity::new(EntityKind::Cannon), shape, geom)
+    }
 
-pub fn make_baddie(start: P, vel: Vector, rotation_speed: f32) -> GameObject {
-    const BADDIE_SIZE: u32 = 160;
-    let shape = Shape::new(start, BADDIE_SIZE, vel, 0.0, rotation_speed);
-    let geom = build_box_geometry(&shape);
-    (Entity::new(EntityKind::Baddie), shape, geom)
-}
+    /// Creates a bullet
+    pub fn make_bullet(&self, center: P, direction: Vector) -> GameObject {
+        let shape = Shape::new(
+            center,
+            self.calc_size(BULLET_SIZE),
+            scale(direction, BULLET_SPEED),
+            0.0,
+            0.0,
+        );
+        let geom = build_box_geometry(&shape);
+        (Entity::new(EntityKind::Bullet), shape, geom)
+    }
 
-pub fn make_wall(center: P) -> GameObject {
-    const WALL_SIZE: u32 = 200;
-    let shape = Shape::new(center, WALL_SIZE, (0, 0), 0.0, 0.0);
-    let geom = build_box_geometry(&shape);
-    (Entity::new(EntityKind::Wall), shape, geom)
+    pub fn make_baddie(&self, start: P, vel: Vector, rotation_speed: f32) -> GameObject {
+        let shape = Shape::new(start, self.calc_size(BADDIE_SIZE), vel, 0.0, rotation_speed);
+        let geom = build_box_geometry(&shape);
+        (Entity::new(EntityKind::Baddie), shape, geom)
+    }
+
+    pub fn make_wall(&self, center: P) -> GameObject {
+        let shape = Shape::new(center, self.calc_size(WALL_SIZE), (0, 0), 0.0, 0.0);
+        let geom = build_box_geometry(&shape);
+        (Entity::new(EntityKind::Wall), shape, geom)
+    }
+
+    fn calc_size(&self, obj_size: f32) -> u32 {
+        (self.base_size as f32 * obj_size) as u32
+    }
 }

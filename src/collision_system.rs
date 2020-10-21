@@ -165,10 +165,11 @@ impl<'a> CollisionSystem<'a> {
     // }
 }
 
+// TODO: Decouple tests from World functions
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::{make_baddie, make_wall};
+    use crate::world::ObjectFactory;
 
     #[test]
     fn grid_hash_1_2() {
@@ -182,8 +183,9 @@ mod tests {
     fn build_map_2walls_1bin() {
         // Arrange - 2 walls in bin 11
         let bin_expected = 11;
-        let (wall1, _, wall1_geom) = make_wall((1200, 1200));
-        let (wall2, _, wall2_geom) = make_wall((1700, 1700));
+        let obj_factory = ObjectFactory::new(1000);
+        let (wall1, _, wall1_geom) = obj_factory.make_wall((1200, 1200));
+        let (wall2, _, wall2_geom) = obj_factory.make_wall((1700, 1700));
         let walls_geoms: ObjectGeometries =
             [(wall1.get_id(), &wall1_geom), (wall2.get_id(), &wall2_geom)]
                 .iter()
@@ -204,8 +206,9 @@ mod tests {
     #[test]
     fn collision_static_simple() {
         // Arrange - 2 walls, 2 baddies, 1 of each colliding, plus associated handler
-        let (wall1, _, wall1_geom) = make_wall((1200, 1200));
-        let (wall2, _, wall2_geom) = make_wall((1700, 1700));
+        let obj_factory = ObjectFactory::new(400);
+        let (wall1, _, wall1_geom) = obj_factory.make_wall((1200, 1200));
+        let (wall2, _, wall2_geom) = obj_factory.make_wall((1700, 1700));
         let walls_geoms: ObjectGeometries =
             [(wall1.get_id(), &wall1_geom), (wall2.get_id(), &wall2_geom)]
                 .iter()
@@ -213,9 +216,9 @@ mod tests {
                 .collect();
 
         // colliding baddie:
-        let (baddie1, _, baddie1_geom) = make_baddie((1200, 1200), (0, 0), 0.0);
+        let (baddie1, _, baddie1_geom) = obj_factory.make_baddie((1200, 1200), (0, 0), 0.0);
         // not colliding baddie:
-        let (baddie2, _, baddie2_geom) = make_baddie((0, 0), (0, 0), 0.0);
+        let (baddie2, _, baddie2_geom) = obj_factory.make_baddie((0, 0), (0, 0), 0.0);
         let baddies_geoms: ObjectGeometries = [
             (baddie1.get_id(), &baddie1_geom),
             (baddie2.get_id(), &baddie2_geom),
@@ -249,10 +252,11 @@ mod tests {
     #[test]
     fn collision_can_mutate_baddie() {
         // Arrange - 1 wall, 1 baddies, colliding, plus associated baddie_wall_handler
-        let (wall, _, wall_geom) = make_wall((1200, 1200));
+        let obj_factory = ObjectFactory::new(1000);
+        let (wall, _, wall_geom) = obj_factory.make_wall((1200, 1200));
         let walls_geoms: ObjectGeometries = [(wall.get_id(), &wall_geom)].iter().cloned().collect();
 
-        let (baddie, mut baddie_shape, baddie_geom) = make_baddie((1200, 1200), (1000, 0), 0.0);
+        let (baddie, mut baddie_shape, baddie_geom) = obj_factory.make_baddie((1200, 1200), (1000, 0), 0.0);
         let baddies_geoms: ObjectGeometries =
             [(baddie.get_id(), &baddie_geom)].iter().cloned().collect();
 
