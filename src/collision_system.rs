@@ -23,7 +23,12 @@ type SpatialMap = HashMap<i32, HashSet<EntityId>>;
 type SpatialIndex = HashMap<EntityId, Bins>;
 type ObjectGeometries<'a> = HashMap<EntityId, &'a Geometry>;
 
+fn calc_bin_count() -> i32 {
+    (GRID_WIDTH as i32 / GRID_BIN_SIZE) * (GRID_HEIGHT as i32 / GRID_BIN_SIZE)
+}
+
 fn calc_bin(vertex: &Vertex) -> i32 {
+    // Assume grid is square, or this calc won't work
     assert!(GRID_WIDTH == GRID_HEIGHT);
     let (vx, vy) = vertex;
     let bx = vx / GRID_BIN_SIZE;
@@ -93,7 +98,6 @@ impl<'a> CollisionSystem<'a> {
         let (baddie_map, baddie_index) = build_map(baddies);
         let (bullet_map, bullet_index) = build_map(bullets);
 
-        // TODO: Move these into private field
         let mut handlers = CollisionHandlers::new();
         handlers.insert(CollisionKind::BaddieWall, baddie_wall_handler);
         handlers.insert(CollisionKind::BulletBaddie, bullet_baddie_handler);
@@ -122,7 +126,7 @@ impl<'a> CollisionSystem<'a> {
         collisions.insert(CollisionKind::BulletBaddie, CollisionPairs::new());
         collisions.insert(CollisionKind::BulletWall, CollisionPairs::new());
 
-        let bin_count = 100; // TODO: Calculate
+        let bin_count = calc_bin_count();
         for i in 0..bin_count {
             // Walls vs Baddies
             if let Some(wall_ids) = self.wall_map.get(&i) {
@@ -327,5 +331,12 @@ mod tests {
 
         // Assert
         assert_eq!(*baddie_shape.get_vel(), (-1000, 0));
+    }
+
+    #[test]
+    fn calc_bin_count() {
+        let bin_count_expected = 100;
+        let bin_count_actual = super::calc_bin_count();
+        assert_eq!(bin_count_actual, bin_count_expected);
     }
 }
