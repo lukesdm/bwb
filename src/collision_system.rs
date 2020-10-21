@@ -1,7 +1,6 @@
 use crate::entity::EntityId;
 use crate::game_logic::{GRID_HEIGHT, GRID_WIDTH};
 use crate::geometry::{is_collision, Geometry, Vertex};
-//use crate::world::ObjectGeometries;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 
@@ -9,7 +8,20 @@ use std::iter::FromIterator;
 /// 10000 / 1000 => 10 * 10 grid
 const GRID_BIN_SIZE: i32 = 1000;
 
+#[derive(PartialEq, Hash, Eq)]
+pub enum CollisionKind {
+    BaddieWall,
+    BulletWall,
+    BulletBaddie,
+}
+pub type CollisionHandler<'a> = Box<dyn 'a + FnMut(EntityId, EntityId) -> ()>;
+pub type CollisionHandlers<'a> = HashMap<CollisionKind, &'a mut CollisionHandler<'a>>;
+type CollisionPairs = HashSet<(EntityId, EntityId)>;
+type Collisions = HashMap<CollisionKind, CollisionPairs>;
 type Bins = HashSet<i32>;
+type SpatialMap = HashMap<i32, HashSet<EntityId>>;
+type SpatialIndex = HashMap<EntityId, Bins>;
+type ObjectGeometries<'a> = HashMap<EntityId, &'a Geometry>;
 
 fn calc_bin(vertex: &Vertex) -> i32 {
     assert!(GRID_WIDTH == GRID_HEIGHT);
@@ -29,12 +41,6 @@ fn grid_hash(vertices: &Geometry) -> Bins {
     bins
 }
 
-type ObjectGeometries<'a> = HashMap<EntityId, &'a Geometry>;
-
-/// Just center points for now. TODO: Expand to handle polys + entity IDs
-type SpatialMap = HashMap<i32, HashSet<EntityId>>;
-type SpatialIndex = HashMap<EntityId, Bins>;
-
 /// Build map of bin -> object list, and associated index
 fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
     let mut object_map = SpatialMap::new();
@@ -43,12 +49,12 @@ fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
         let (id, vertices) = geometry;
         let grid_bins = grid_hash(vertices);
         for bin in grid_bins.iter() {
-        object_map
-            .entry(*bin)
-            .and_modify(|e| {
-                e.insert(*id);
-            })
-            .or_insert(HashSet::from_iter([*id].iter().cloned()));
+            object_map
+                .entry(*bin)
+                .and_modify(|e| {
+                    e.insert(*id);
+                })
+                .or_insert(HashSet::from_iter([*id].iter().cloned()));
         }
 
         let existing = object_index.insert(*id, grid_bins);
@@ -58,10 +64,6 @@ fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
     }
     (object_map, object_index)
 }
-
-//type CollisionPair = (EntityId, EntityId);
-type Collisions = HashSet<(EntityId, EntityId)>;
-type CollisionHandler<'a> = Box<dyn 'a + FnMut(EntityId, EntityId) -> ()>;
 
 /// Detects collisions and runs handlers as appropriate
 pub struct CollisionSystem<'a> {
@@ -111,9 +113,16 @@ impl<'a> CollisionSystem<'a> {
         baddies: &ObjectGeometries,
         bullets: &ObjectGeometries,
     ) {
-        let mut baddie_wall_collisions = Collisions::new();
-        let mut bullet_baddie_collisions = Collisions::new();
-        let mut bullet_wall_collisions = Collisions::new();
+        let mut collisions = Collisions::new();
+        collisions.insert(CollisionKind::BaddieWall, CollisionPairs::new());
+        collisions.insert(CollisionKind::BulletBaddie, CollisionPairs::new());
+        collisions.insert(CollisionKind::BulletWall, CollisionPairs::new());
+
+        // TODO: Move these into private field
+        let mut handlers = CollisionHandlers::new();
+        handlers.insert(CollisionKind::BaddieWall, &mut self.baddie_wall_handler);
+        handlers.insert(CollisionKind::BulletBaddie, &mut self.bullet_baddie_handler);
+        handlers.insert(CollisionKind::BulletWall, &mut self.bullet_wall_handler);
         let bin_count = 100; // TODO: Calculate
         for i in 0..bin_count {
             // Walls vs Baddies
@@ -124,7 +133,10 @@ impl<'a> CollisionSystem<'a> {
                             let wall_geom = walls.get(wall_id).unwrap();
                             let baddie_geom = baddies.get(baddie_id).unwrap();
                             if is_collision(*wall_geom, *baddie_geom) {
-                                baddie_wall_collisions.insert((*baddie_id, *wall_id));
+                                collisions
+                                    .get_mut(&CollisionKind::BaddieWall)
+                                    .unwrap()
+                                    .insert((*baddie_id, *wall_id));
                             }
                         }
                     }
@@ -140,7 +152,10 @@ impl<'a> CollisionSystem<'a> {
                             let bullet_geom = bullets.get(bullet_id).unwrap();
                             let wall_geom = walls.get(wall_id).unwrap();
                             if is_collision(*bullet_geom, *wall_geom) {
-                                bullet_wall_collisions.insert((*bullet_id, *wall_id));
+                                collisions
+                                    .get_mut(&CollisionKind::BulletWall)
+                                    .unwrap()
+                                    .insert((*bullet_id, *wall_id));
                             }
                         }
                     }
@@ -151,7 +166,10 @@ impl<'a> CollisionSystem<'a> {
                             let bullet_geom = bullets.get(bullet_id).unwrap();
                             let baddie_geom = baddies.get(baddie_id).unwrap();
                             if is_collision(*bullet_geom, *baddie_geom) {
-                                bullet_baddie_collisions.insert((*bullet_id, *baddie_id));
+                                collisions
+                                    .get_mut(&CollisionKind::BulletBaddie)
+                                    .unwrap()
+                                    .insert((*bullet_id, *baddie_id));
                             }
                         }
                     }
@@ -159,16 +177,11 @@ impl<'a> CollisionSystem<'a> {
             }
         }
 
-        for (baddie_id, wall_id) in baddie_wall_collisions {
-            (self.baddie_wall_handler)(baddie_id, wall_id);
-        }
-
-        for (bullet_id, baddie_id) in bullet_baddie_collisions {
-            (self.bullet_baddie_handler)(bullet_id, baddie_id);
-        }
-
-        for (bullet_id, wall_id) in bullet_wall_collisions {
-            (self.bullet_wall_handler)(bullet_id, wall_id);
+        for (collision_kind, collision_pairs) in collisions {
+            for collision_pair in collision_pairs {
+                let handler = handlers.get_mut(&collision_kind).unwrap();
+                handler(collision_pair.0, collision_pair.1);
+            }
         }
     }
 
@@ -187,7 +200,6 @@ mod tests {
     fn grid_hash_single() {
         let vertex = (1000, 2000);
         let expected = Bins::from_iter([21].iter().cloned());
-        
         let actual = grid_hash(&[vertex, vertex, vertex, vertex, vertex]);
 
         assert_eq!(expected, actual);
@@ -200,12 +212,10 @@ mod tests {
             (1000, 2000), // bin 21
             (1770, 2200), // bin 21
             (1550, 2900), // bin 21
-            (780, 2770), // bin 20
-            (1000, 2000) // bin 21
+            (780, 2770),  // bin 20
+            (1000, 2000), // bin 21
         ];
         let expected = Bins::from_iter([20, 21].iter().cloned());
-        
-        
         let actual = grid_hash(&vertices);
 
         assert_eq!(expected, actual);
@@ -290,7 +300,8 @@ mod tests {
         let (wall, _, wall_geom) = obj_factory.make_wall((1200, 1200));
         let walls_geoms: ObjectGeometries = [(wall.get_id(), &wall_geom)].iter().cloned().collect();
 
-        let (baddie, mut baddie_shape, baddie_geom) = obj_factory.make_baddie((1200, 1200), (1000, 0), 0.0);
+        let (baddie, mut baddie_shape, baddie_geom) =
+            obj_factory.make_baddie((1200, 1200), (1000, 0), 0.0);
         let baddies_geoms: ObjectGeometries =
             [(baddie.get_id(), &baddie_geom)].iter().cloned().collect();
 
