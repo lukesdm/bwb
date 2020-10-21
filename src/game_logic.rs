@@ -138,7 +138,9 @@ fn handle_collisions(
     let mut to_remove_2 = HashSet::<EntityId>::new();
     {
         let baddie_wall_handler = |baddie_id: EntityId, _wall_id: EntityId| {
-            shapes.get_mut(&baddie_id).unwrap().reverse();
+            let baddie_shape = shapes.get_mut(&baddie_id).unwrap();
+            baddie_shape.move_back();
+            baddie_shape.reverse();
         };
 
         let bullet_wall_handler = |bullet_id: EntityId, _wall_id: EntityId| {
