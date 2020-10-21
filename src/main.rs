@@ -236,7 +236,23 @@ pub fn main() {
         wall_pc: 25,
         baddie_speed: 600,
     };
-    let obj_factory = ObjectFactory::new(level1_params.base_size);
-    let world = init_level(&obj_factory, &level1_params);
+
+    let level99_params = LevelParams {
+        base_size: 100,
+        sparsity: 5,
+        wall_pc: 20,
+        baddie_speed: 600,
+    };
+
+    let levelxxx_params = LevelParams {
+        base_size: 20,
+        sparsity: 5,
+        wall_pc: 20,
+        baddie_speed: 600,
+    };
+    let level_params = level1_params;
+    //let level_params = levelxxx_params;
+    let obj_factory = ObjectFactory::new(level_params.base_size);
+    let world = init_level(&obj_factory, &level_params);
     engine_run(world, &obj_factory);
 }
