@@ -25,12 +25,9 @@ use geometry::*;
 
 mod world;
 
-
 mod game_logic;
 use crate::entity::EntityKind;
-use crate::world::{
-    create_world, Entities, GameObject, ObjectFactory, ObjectGeometries, World,
-};
+use crate::world::{create_world, Entities, GameObject, ObjectFactory, ObjectGeometries, World};
 use game_logic::*;
 use std::collections::HashMap;
 
@@ -118,15 +115,25 @@ fn engine_run(mut world: World, obj_factory: &ObjectFactory) {
                     keycode: Some(Keycode::Left),
                     ..
                 } => {
-                    prev_fire_time =
-                        try_fire(current_time, prev_fire_time, &mut world, Direction::Left, obj_factory)
+                    prev_fire_time = try_fire(
+                        current_time,
+                        prev_fire_time,
+                        &mut world,
+                        Direction::Left,
+                        obj_factory,
+                    )
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Right),
                     ..
                 } => {
-                    prev_fire_time =
-                        try_fire(current_time, prev_fire_time, &mut world, Direction::Right, obj_factory)
+                    prev_fire_time = try_fire(
+                        current_time,
+                        prev_fire_time,
+                        &mut world,
+                        Direction::Right,
+                        obj_factory,
+                    )
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Up),
@@ -152,9 +159,15 @@ fn engine_run(mut world: World, obj_factory: &ObjectFactory) {
     }
 }
 
-fn init_level(obj_factory: &ObjectFactory) -> World {
+/// Procedurally generates level data.
+fn init_level(obj_factory: &ObjectFactory, level_params: &LevelParams) -> World {
+    const MAX_SPIN: i32 = 120;
+    let base_size = level_params.base_size as i32;
+    let sparsity = level_params.sparsity as i32;
+    let wall_pc = level_params.wall_pc as i32;
+    let baddie_speed = level_params.baddie_speed as i32;
+
     let mut level_data = Vec::<GameObject>::new();
-    const WALL_RATIO: u32 = 20; // % of generated entities that are walls.
     let seed: &[_] = &[1, 2, 3, 4];
     let mut rng: StdRng = SeedableRng::from_seed(seed);
     let mut next_random = |lower, upper| rng.gen_range(lower, upper + 1);
@@ -162,19 +175,22 @@ fn init_level(obj_factory: &ObjectFactory) -> World {
 
     let mut curr_y = 0;
     while curr_y < GRID_HEIGHT {
-        let y_inc = 200; // TODO: Parameterize
+        let y_inc = base_size as u32;
         curr_y += y_inc;
         let mut curr_x = 0;
         while curr_x < GRID_WIDTH {
-            let x_inc = next_random(100, 1000); // TODO: Parameterize
+            let x_inc = next_random(base_size / 2, base_size * sparsity);
             curr_x += x_inc as u32;
-            if next_random(0, 100) < WALL_RATIO as i32 {
+            if next_random(0, 100) < wall_pc {
                 level_data.push(obj_factory.make_wall((curr_x as i32, curr_y as i32)));
             } else {
                 level_data.push(obj_factory.make_baddie(
                     (curr_x as i32, curr_y as i32),
-                    (next_random(-100, 100), next_random(-100, 100)),
-                    next_random(-100, 100) as f32 / 100.0,
+                    (
+                        next_random(-baddie_speed, baddie_speed),
+                        next_random(-baddie_speed, baddie_speed),
+                    ),
+                    next_random(-MAX_SPIN, MAX_SPIN) as f32 / 100.0,
                 ));
             }
         }
@@ -201,8 +217,26 @@ fn init_level0(obj_factory: ObjectFactory) -> World {
     create_world(level_data)
 }
 
+struct LevelParams {
+    /// Base size for the level's objects. 1000 is a good amount
+    base_size: u32,
+    /// Sparsity of generated objects. Valid range from 1 (most dense) to 10 (least dense)  
+    sparsity: u32,
+    /// % of generated entities that are walls (the rest will be baddies).  
+    wall_pc: u32,
+
+    /// Max baddie speed, in units per second. 1000 is a good amount.
+    baddie_speed: u32,
+}
+
 pub fn main() {
-    let obj_factory = ObjectFactory::new(400);
-    let world = init_level(&obj_factory);
+    let level1_params = LevelParams {
+        base_size: 1000,
+        sparsity: 10,
+        wall_pc: 25,
+        baddie_speed: 600,
+    };
+    let obj_factory = ObjectFactory::new(level1_params.base_size);
+    let world = init_level(&obj_factory, &level1_params);
     engine_run(world, &obj_factory);
 }

@@ -118,6 +118,12 @@ impl ObjectFactory {
     pub fn new(base_size: u32) -> Self {
         Self { base_size }
     }
+
+    /// Gets the base size
+    pub fn get_base_size(&self) -> u32 {
+        self.base_size
+    }
+
     /// Creates a cannon
     pub fn make_cannon(&self, center: P) -> GameObject {
         let shape = Shape::new(center, self.calc_size(CANNON_SIZE), (0, 0), PI / 4.0, 0.0);
