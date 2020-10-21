@@ -59,6 +59,8 @@ fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
     (object_map, object_index)
 }
 
+//type CollisionPair = (EntityId, EntityId);
+type Collisions = HashSet<(EntityId, EntityId)>;
 type CollisionHandler<'a> = Box<dyn 'a + FnMut(EntityId, EntityId) -> ()>;
 
 /// Detects collisions and runs handlers as appropriate
@@ -109,6 +111,9 @@ impl<'a> CollisionSystem<'a> {
         baddies: &ObjectGeometries,
         bullets: &ObjectGeometries,
     ) {
+        let mut baddie_wall_collisions = Collisions::new();
+        let mut bullet_baddie_collisions = Collisions::new();
+        let mut bullet_wall_collisions = Collisions::new();
         let bin_count = 100; // TODO: Calculate
         for i in 0..bin_count {
             // Walls vs Baddies
@@ -119,7 +124,7 @@ impl<'a> CollisionSystem<'a> {
                             let wall_geom = walls.get(wall_id).unwrap();
                             let baddie_geom = baddies.get(baddie_id).unwrap();
                             if is_collision(*wall_geom, *baddie_geom) {
-                                (self.baddie_wall_handler)(*baddie_id, *wall_id);
+                                baddie_wall_collisions.insert((*baddie_id, *wall_id));
                             }
                         }
                     }
@@ -135,7 +140,7 @@ impl<'a> CollisionSystem<'a> {
                             let bullet_geom = bullets.get(bullet_id).unwrap();
                             let wall_geom = walls.get(wall_id).unwrap();
                             if is_collision(*bullet_geom, *wall_geom) {
-                                (self.bullet_wall_handler)(*bullet_id, *wall_id)
+                                bullet_wall_collisions.insert((*bullet_id, *wall_id));
                             }
                         }
                     }
@@ -146,12 +151,24 @@ impl<'a> CollisionSystem<'a> {
                             let bullet_geom = bullets.get(bullet_id).unwrap();
                             let baddie_geom = baddies.get(baddie_id).unwrap();
                             if is_collision(*bullet_geom, *baddie_geom) {
-                                (self.bullet_baddie_handler)(*bullet_id, *baddie_id)
+                                bullet_baddie_collisions.insert((*bullet_id, *baddie_id));
                             }
                         }
                     }
                 }
             }
+        }
+
+        for (baddie_id, wall_id) in baddie_wall_collisions {
+            (self.baddie_wall_handler)(baddie_id, wall_id);
+        }
+
+        for (bullet_id, baddie_id) in bullet_baddie_collisions {
+            (self.bullet_baddie_handler)(bullet_id, baddie_id);
+        }
+
+        for (bullet_id, wall_id) in bullet_wall_collisions {
+            (self.bullet_wall_handler)(bullet_id, wall_id);
         }
     }
 
