@@ -1,6 +1,6 @@
 use crate::entity::EntityId;
 use crate::game_logic::{GRID_HEIGHT, GRID_WIDTH};
-use crate::geometry::{is_collision, Geometry, P};
+use crate::geometry::{is_collision, Geometry, Vertex};
 //use crate::world::ObjectGeometries;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
@@ -9,55 +9,51 @@ use std::iter::FromIterator;
 /// 10000 / 1000 => 10 * 10 grid
 const GRID_BIN_SIZE: i32 = 1000;
 
-// TODO: Get rid of this once per-vertex hashing is implemented.
-fn get_center(geom: &Geometry) -> P {
-    let mut cx = 0;
-    let mut cy = 0;
-    // Average 4 corner vertices, ignoring 5th (duplicate)
-    for p in geom.iter().take(4) {
-        let (x, y) = p;
-        cx += x;
-        cy += y;
-    }
+type Bins = HashSet<i32>;
 
-    (cx / 4, cy / 4)
+fn calc_bin(vertex: &Vertex) -> i32 {
+    assert!(GRID_WIDTH == GRID_HEIGHT);
+    let (vx, vy) = vertex;
+    let bx = vx / GRID_BIN_SIZE;
+    let by = vy / GRID_BIN_SIZE;
+    bx + by * GRID_WIDTH as i32 / GRID_BIN_SIZE
 }
 
-/// Spatial hash. For now, just use a center point. TODO: use box/circle geometry
-fn grid_hash(center: P) -> i32 {
-    assert!(GRID_WIDTH == GRID_HEIGHT);
-    let (cx, cy) = center;
-    let bx = cx / GRID_BIN_SIZE;
-    let by = cy / GRID_BIN_SIZE;
-    bx + by * GRID_WIDTH as i32 / GRID_BIN_SIZE
+/// Spatial hash. Calculates the indices of a regular grid that the given geometry occupies.
+/// Important - this implementation only works if shape size < bin size.
+fn grid_hash(vertices: &Geometry) -> Bins {
+    let mut bins = Bins::new();
+    for v in vertices {
+        bins.insert(calc_bin(v));
+    }
+    bins
 }
 
 type ObjectGeometries<'a> = HashMap<EntityId, &'a Geometry>;
 
 /// Just center points for now. TODO: Expand to handle polys + entity IDs
 type SpatialMap = HashMap<i32, HashSet<EntityId>>;
-type SpatialIndex = HashMap<EntityId, i32>;
+type SpatialIndex = HashMap<EntityId, Bins>;
 
-/// Build map of bin -> object list, and associated index (currently using center point, as a rough way to ID an object)
+/// Build map of bin -> object list, and associated index
 fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
     let mut object_map = SpatialMap::new();
     let mut object_index = SpatialIndex::new();
     for geometry in geometries {
-        //let (id, center, _) = *obj;
         let (id, vertices) = geometry;
-        let center = get_center(vertices);
-        let grid_bin = grid_hash(center); // TODO: use all geometry
+        let grid_bins = grid_hash(vertices);
+        for bin in grid_bins.iter() {
         object_map
-            .entry(grid_bin)
+            .entry(*bin)
             .and_modify(|e| {
                 e.insert(*id);
             })
             .or_insert(HashSet::from_iter([*id].iter().cloned()));
+        }
 
-        let existing = object_index.insert(*id, grid_bin);
-        // theoretical problem to watch out for (but not yet a real concern)
-        if let Some(p_existing) = existing {
-            println!("Duplicate object detected with id:  {}", p_existing);
+        let existing = object_index.insert(*id, grid_bins);
+        if let Some(_) = existing {
+            panic!("Unexpected duplicate object.");
         }
     }
     (object_map, object_index)
@@ -107,9 +103,8 @@ impl<'a> CollisionSystem<'a> {
     }
 
     /// Check collisions and run appropriate handlers
-    // TODO: Handle geometry spanning multiple bins
     pub fn process(
-        &mut self, // TODO: Check - needs to be mutable?
+        &mut self,
         walls: &ObjectGeometries,
         baddies: &ObjectGeometries,
         bullets: &ObjectGeometries,
@@ -172,10 +167,31 @@ mod tests {
     use crate::world::ObjectFactory;
 
     #[test]
-    fn grid_hash_1_2() {
-        let actual = grid_hash((1000, 2000));
+    fn grid_hash_single() {
+        let vertex = (1000, 2000);
+        let expected = Bins::from_iter([21].iter().cloned());
+        
+        let actual = grid_hash(&[vertex, vertex, vertex, vertex, vertex]);
 
-        assert_eq!(21, actual);
+        assert_eq!(expected, actual);
+    }
+
+    /// Tilted box spanning multiple bins
+    #[test]
+    fn grid_hash_box() {
+        let vertices = [
+            (1000, 2000), // bin 21
+            (1770, 2200), // bin 21
+            (1550, 2900), // bin 21
+            (780, 2770), // bin 20
+            (1000, 2000) // bin 21
+        ];
+        let expected = Bins::from_iter([20, 21].iter().cloned());
+        
+        
+        let actual = grid_hash(&vertices);
+
+        assert_eq!(expected, actual);
     }
 
     /// 2 walls in same bin - build map and index
@@ -183,6 +199,7 @@ mod tests {
     fn build_map_2walls_1bin() {
         // Arrange - 2 walls in bin 11
         let bin_expected = 11;
+        let bins_expected = Bins::from_iter([11].iter().cloned());
         let obj_factory = ObjectFactory::new(1000);
         let (wall1, _, wall1_geom) = obj_factory.make_wall((1200, 1200));
         let (wall2, _, wall2_geom) = obj_factory.make_wall((1700, 1700));
@@ -199,8 +216,8 @@ mod tests {
         assert_eq!(wall_map.get(&bin_expected).unwrap(), &expected);
 
         // Assert - index
-        assert_eq!(wall_index.get(&wall1.get_id()), Some(&bin_expected));
-        assert_eq!(wall_index.get(&wall2.get_id()), Some(&bin_expected));
+        assert_eq!(wall_index.get(&wall1.get_id()), Some(&bins_expected));
+        assert_eq!(wall_index.get(&wall2.get_id()), Some(&bins_expected));
     }
 
     #[test]
