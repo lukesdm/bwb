@@ -15,7 +15,7 @@ pub enum CollisionKind {
     BulletBaddie,
 }
 pub type CollisionHandler<'a> = Box<dyn 'a + FnMut(EntityId, EntityId) -> ()>;
-pub type CollisionHandlers<'a> = HashMap<CollisionKind, &'a mut CollisionHandler<'a>>;
+pub type CollisionHandlers<'a> = HashMap<CollisionKind, CollisionHandler<'a>>;
 type CollisionPairs = HashSet<(EntityId, EntityId)>;
 type Collisions = HashMap<CollisionKind, CollisionPairs>;
 type Bins = HashSet<i32>;
@@ -68,14 +68,15 @@ fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
 /// Detects collisions and runs handlers as appropriate
 pub struct CollisionSystem<'a> {
     wall_map: SpatialMap,
+    #[allow(unused)]
     wall_index: SpatialIndex,
     baddie_map: SpatialMap,
+    #[allow(unused)]
     baddie_index: SpatialIndex,
     bullet_map: SpatialMap,
+    #[allow(unused)]
     bullet_index: SpatialIndex,
-    baddie_wall_handler: CollisionHandler<'a>,
-    bullet_wall_handler: CollisionHandler<'a>,
-    bullet_baddie_handler: CollisionHandler<'a>,
+    handlers: CollisionHandlers<'a>,
 }
 
 impl<'a> CollisionSystem<'a> {
@@ -88,10 +89,15 @@ impl<'a> CollisionSystem<'a> {
         bullet_baddie_handler: CollisionHandler<'a>,
     ) -> Self {
         // build hashmaps from object geometries
-
         let (wall_map, wall_index) = build_map(walls);
         let (baddie_map, baddie_index) = build_map(baddies);
         let (bullet_map, bullet_index) = build_map(bullets);
+
+        // TODO: Move these into private field
+        let mut handlers = CollisionHandlers::new();
+        handlers.insert(CollisionKind::BaddieWall, baddie_wall_handler);
+        handlers.insert(CollisionKind::BulletBaddie, bullet_baddie_handler);
+        handlers.insert(CollisionKind::BulletWall, bullet_wall_handler);
 
         Self {
             wall_map,
@@ -100,9 +106,7 @@ impl<'a> CollisionSystem<'a> {
             baddie_index,
             bullet_map,
             bullet_index,
-            baddie_wall_handler,
-            bullet_wall_handler,
-            bullet_baddie_handler,
+            handlers,
         }
     }
 
@@ -118,11 +122,6 @@ impl<'a> CollisionSystem<'a> {
         collisions.insert(CollisionKind::BulletBaddie, CollisionPairs::new());
         collisions.insert(CollisionKind::BulletWall, CollisionPairs::new());
 
-        // TODO: Move these into private field
-        let mut handlers = CollisionHandlers::new();
-        handlers.insert(CollisionKind::BaddieWall, &mut self.baddie_wall_handler);
-        handlers.insert(CollisionKind::BulletBaddie, &mut self.bullet_baddie_handler);
-        handlers.insert(CollisionKind::BulletWall, &mut self.bullet_wall_handler);
         let bin_count = 100; // TODO: Calculate
         for i in 0..bin_count {
             // Walls vs Baddies
@@ -179,7 +178,7 @@ impl<'a> CollisionSystem<'a> {
 
         for (collision_kind, collision_pairs) in collisions {
             for collision_pair in collision_pairs {
-                let handler = handlers.get_mut(&collision_kind).unwrap();
+                let handler = self.handlers.get_mut(&collision_kind).unwrap();
                 handler(collision_pair.0, collision_pair.1);
             }
         }

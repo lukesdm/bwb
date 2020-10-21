@@ -151,7 +151,7 @@ fn handle_collisions(
         };
         let (wall_geoms, baddie_geoms, bullet_geoms) =
             world::destructure_geom(&entities, &geometries);
-
+        
         let mut collision_system = CollisionSystem::new(
             &wall_geoms,
             &baddie_geoms,
