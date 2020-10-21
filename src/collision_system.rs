@@ -194,15 +194,15 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
-    /// 2 walls in same bin - build map and index
+    /// 2 walls with some occupying some bins in common - build map and index
     #[test]
-    fn build_map_2walls_1bin() {
+    fn build_map_2walls_some_common_bins() {
         // Arrange - 2 walls in bin 11
-        let bin_expected = 11;
-        let bins_expected = Bins::from_iter([11].iter().cloned());
         let obj_factory = ObjectFactory::new(1000);
         let (wall1, _, wall1_geom) = obj_factory.make_wall((1200, 1200));
+        let w1_bins_expected = Bins::from_iter([0, 1, 10, 11].iter().cloned());
         let (wall2, _, wall2_geom) = obj_factory.make_wall((1700, 1700));
+        let w2_bins_expected = Bins::from_iter([11, 12, 21, 22].iter().cloned());
         let walls_geoms: ObjectGeometries =
             [(wall1.get_id(), &wall1_geom), (wall2.get_id(), &wall2_geom)]
                 .iter()
@@ -213,11 +213,11 @@ mod tests {
         let (wall_map, wall_index) = build_map(&walls_geoms);
 
         // Assert - map
-        assert_eq!(wall_map.get(&bin_expected).unwrap(), &expected);
+        assert_eq!(wall_map.get(&11).unwrap(), &expected);
 
         // Assert - index
-        assert_eq!(wall_index.get(&wall1.get_id()), Some(&bins_expected));
-        assert_eq!(wall_index.get(&wall2.get_id()), Some(&bins_expected));
+        assert_eq!(wall_index.get(&wall1.get_id()), Some(&w1_bins_expected));
+        assert_eq!(wall_index.get(&wall2.get_id()), Some(&w2_bins_expected));
     }
 
     #[test]
