@@ -128,7 +128,7 @@ fn handle_bullet_misses(world: &mut World) {
     }
 }
 
-fn handle_collisions(
+fn detect_and_handle_collisions(
     entities: &Entities,
     shapes: &mut Shapes,
     geometries: &ObjectGeometries,
@@ -192,7 +192,7 @@ pub fn update_world(mut world: World, dt: i32) -> World {
 
     handle_bullet_misses(&mut world);
     let (entities, mut shapes, geometries) = world;
-    let to_remove = handle_collisions(&entities, &mut shapes, &geometries);
+    let to_remove = detect_and_handle_collisions(&entities, &mut shapes, &geometries);
 
     world = (entities, shapes, geometries);
     for e in to_remove {

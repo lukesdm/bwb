@@ -198,8 +198,8 @@ fn init_level(obj_factory: &ObjectFactory, level_params: &LevelParams) -> World 
     create_world(level_data)
 }
 
-/// Hardcoded first level - TODO: add back in once level system implemented.
-fn init_level0(obj_factory: ObjectFactory) -> World {
+/// Hardcoded alternative first level
+fn init_level0(obj_factory: &ObjectFactory) -> World {
     let level_data: Vec<GameObject> = vec![
         obj_factory.make_cannon((GRID_WIDTH as i32 / 2, GRID_HEIGHT as i32 / 2)),
         obj_factory.make_wall((2500, 2500)),
@@ -250,9 +250,19 @@ pub fn main() {
         wall_pc: 20,
         baddie_speed: 600,
     };
-    let level_params = level1_params;
-    //let level_params = levelxxx_params;
+    // TODO: Parameterize
+    let level = 1;
+
+    let level_params = match level {
+        1 => level1_params,
+        99 => level99_params,
+        -1 => levelxxx_params,
+        _ => level1_params,
+    };
     let obj_factory = ObjectFactory::new(level_params.base_size);
-    let world = init_level(&obj_factory, &level_params);
+    let world = match level {
+        0 => init_level0(&obj_factory),
+        _ => init_level(&obj_factory, &level_params),
+    };
     engine_run(world, &obj_factory);
 }

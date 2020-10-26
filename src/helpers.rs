@@ -3,6 +3,7 @@
 use std::{collections::HashSet, hash::Hash};
 
 /// Removes multiple elements from a vector, given a collection of indices to remove.
+#[allow(unused)]
 pub fn remove_multiple<T>(vector: &mut Vec<T>, to_remove: &Vec<usize>) {
     // As items are removed, their indices will change, so we have to keep track of the new indices.
     let mut to_remove = to_remove.to_vec();
@@ -28,9 +29,9 @@ pub fn remove_multiple<T>(vector: &mut Vec<T>, to_remove: &Vec<usize>) {
     }
 }
 
-/// Tests whether the given vectors contain the same items, regardless of order
+/// Tests set equivalence - whether the given slices contain the same items, regardless of order
 /// from: https://stackoverflow.com/a/42748484
-//pub fn set_eq<T>
+#[allow(unused)]
 pub fn set_eq<T>(a: &[T], b: &[T]) -> bool
 where
     T: Eq + Hash,
