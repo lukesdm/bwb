@@ -1,10 +1,9 @@
 //! Fundamental helper functions
 
-// TODO: Use a hashset for to_remove - solves duplicates issues
-// use std::collections::HashSet;
-// pub fn remove_multiple<T>(vector: &mut Vec<T>, to_remove: &HashSet<usize>) {
+use std::{collections::HashSet, hash::Hash};
 
-/// Remove multiple elements from a vector, given a collection of the indices to remove.
+/// Removes multiple elements from a vector, given a collection of indices to remove.
+#[allow(unused)]
 pub fn remove_multiple<T>(vector: &mut Vec<T>, to_remove: &Vec<usize>) {
     // As items are removed, their indices will change, so we have to keep track of the new indices.
     let mut to_remove = to_remove.to_vec();
@@ -30,9 +29,22 @@ pub fn remove_multiple<T>(vector: &mut Vec<T>, to_remove: &Vec<usize>) {
     }
 }
 
+/// Tests set equivalence - whether the given slices contain the same items, regardless of order
+/// from: https://stackoverflow.com/a/42748484
+#[allow(unused)]
+pub fn set_eq<T>(a: &[T], b: &[T]) -> bool
+where
+    T: Eq + Hash,
+{
+    let a: HashSet<_> = a.iter().collect();
+    let b: HashSet<_> = b.iter().collect();
+
+    a == b
+}
+
 #[cfg(test)]
 mod tests {
-    use super::remove_multiple;
+    use super::{remove_multiple, set_eq};
 
     #[test]
     fn remove_multiple_0_3() {
@@ -119,5 +131,17 @@ mod tests {
 
         // Act
         remove_multiple(&mut vec, &to_remove);
+    }
+
+    #[test]
+    fn set_eq_test() {
+        assert!(set_eq(
+            &vec!["foo", "bar", "baz", "beh"],
+            &vec!["beh", "foo", "baz", "bar"]
+        ));
+        assert!(!set_eq(
+            &vec!["beh", "foo", "baz", "bar"],
+            &vec!["beh", "foo", "baz", "baz"]
+        ));
     }
 }

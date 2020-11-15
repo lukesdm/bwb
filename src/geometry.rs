@@ -12,7 +12,7 @@ pub type Vertex = Vector;
 // Might be tempting to combine the above types, but conceptually they are different things, e.g. the centre point of a box is not a vertice.
 // P and Vertex can be described by position vectors though, hence just alias the same. // TODO: Use newtype
 
-// An interval/range of (Min, Max)
+/// An interval/range of (Min, Max)
 pub type MinMax = (i32, i32);
 
 pub type Geometry = [Vertex; 5];
@@ -117,7 +117,7 @@ pub fn is_collision(poly1: &[P], poly2: &[P]) -> bool {
     // Start at iv=1 as the first edge is P1 - P0
     for poly in &[poly1, poly2] {
         for iv in 1..poly.len() {
-            let edge = edge(poly1[iv - 1], poly1[iv]);
+            let edge = edge(poly[iv - 1], poly[iv]);
 
             let normal = normal(edge);
 
@@ -134,6 +134,22 @@ pub fn is_collision(poly1: &[P], poly2: &[P]) -> bool {
     }
     // No breaks therefore polygons intersect
     true
+}
+
+pub fn direction_vector(direction: Direction) -> Vector {
+    match direction {
+        Direction::Up => (0, -1),
+        Direction::Down => (0, 1),
+        Direction::Left => (-1, 0),
+        Direction::Right => (1, 0),
+    }
+}
+
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
 #[cfg(test)]
@@ -258,6 +274,33 @@ mod tests {
         // Arrange
         let poly1 = [(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)];
         let poly2 = [(4, 4), (6, 4), (6, 6), (4, 6), (4, 4)];
+        let expected = false;
+
+        // Act
+        let result = super::is_collision(&poly1, &poly2);
+
+        // Assert
+        assert_eq!(result, expected);
+    }
+
+    /// Regression test for bug resulting in false positive
+    #[test]
+    fn colliding_nearmiss() {
+        // Arrange
+        let poly1 = [
+            (2260, 2628),
+            (3232, 2400),
+            (3460, 3372),
+            (2488, 3600),
+            (2260, 2628),
+        ];
+        let poly2 = [
+            (3098, 3654),
+            (4006, 3238),
+            (4422, 4146),
+            (3514, 4562),
+            (3098, 3654),
+        ];
         let expected = false;
 
         // Act
