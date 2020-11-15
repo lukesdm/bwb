@@ -156,11 +156,11 @@ fn init_level() -> World {
     let mut baddies: Vec<Baddie> = vec![];
     let mut curr_y = 0;
     while curr_y < GRID_HEIGHT {
-        let y_inc = 1000; // TODO: Parameterize
+        let y_inc = 200; // TODO: Parameterize
         curr_y += y_inc;
         let mut curr_x = 0;
         while curr_x < GRID_WIDTH {
-            let x_inc = next_random(500, 1500); // TODO: Parameterize
+            let x_inc = next_random(100, 1000); // TODO: Parameterize
             curr_x += x_inc as u32;
             if next_random(0, 100) < WALL_RATIO as i32 {
                 walls.push(Wall::new((curr_x as i32, curr_y as i32)));
