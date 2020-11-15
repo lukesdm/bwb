@@ -117,7 +117,7 @@ pub fn is_collision(poly1: &[P], poly2: &[P]) -> bool {
     // Start at iv=1 as the first edge is P1 - P0
     for poly in &[poly1, poly2] {
         for iv in 1..poly.len() {
-            let edge = edge(poly1[iv - 1], poly1[iv]);
+            let edge = edge(poly[iv - 1], poly[iv]);
 
             let normal = normal(edge);
 
@@ -274,6 +274,33 @@ mod tests {
         // Arrange
         let poly1 = [(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)];
         let poly2 = [(4, 4), (6, 4), (6, 6), (4, 6), (4, 4)];
+        let expected = false;
+
+        // Act
+        let result = super::is_collision(&poly1, &poly2);
+
+        // Assert
+        assert_eq!(result, expected);
+    }
+
+    /// Regression test for bug resulting in false positive
+    #[test]
+    fn colliding_nearmiss() {
+        // Arrange
+        let poly1 = [
+            (2260, 2628),
+            (3232, 2400),
+            (3460, 3372),
+            (2488, 3600),
+            (2260, 2628),
+        ];
+        let poly2 = [
+            (3098, 3654),
+            (4006, 3238),
+            (4422, 4146),
+            (3514, 4562),
+            (3098, 3654),
+        ];
         let expected = false;
 
         // Act
