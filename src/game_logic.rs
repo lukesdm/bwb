@@ -14,13 +14,11 @@ use crate::entity::{Entity, EntityId, EntityKind};
 use crate::geometry::{direction_vector, Direction, P};
 use crate::shape::Shape;
 use crate::world;
-use crate::world::{update_geometry, Entities, ObjectGeometries, Shapes, World};
+use crate::world::{
+    update_geometry, Entities, ObjectGeometries, Shapes, World, GRID_HEIGHT, GRID_WIDTH,
+};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
-
-// World coordinate bounds
-pub const GRID_WIDTH: u32 = 10000;
-pub const GRID_HEIGHT: u32 = 10000;
 
 fn get_cannon(world: &World) -> &Entity {
     world
@@ -32,7 +30,8 @@ fn get_cannon(world: &World) -> &Entity {
 
 fn get_cannon_pos(world: &World) -> &P {
     let cannon_id = get_cannon(world).get_id();
-    world.1.get(&cannon_id).unwrap().get_center()
+    let (_, shapes, _) = world;
+    shapes.get(&cannon_id).unwrap().get_center()
 }
 
 // (ACTION)
@@ -153,7 +152,6 @@ fn detect_and_handle_collisions(
         };
         let (wall_geoms, baddie_geoms, bullet_geoms) =
             world::destructure_geom(&entities, &geometries);
-        
         let mut collision_system = CollisionSystem::new(
             &wall_geoms,
             &baddie_geoms,

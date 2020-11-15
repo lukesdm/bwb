@@ -1,6 +1,6 @@
 use crate::entity::EntityId;
-use crate::game_logic::{GRID_HEIGHT, GRID_WIDTH};
 use crate::geometry::{is_collision, Geometry, Vertex};
+use crate::world::{GRID_HEIGHT, GRID_WIDTH};
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 

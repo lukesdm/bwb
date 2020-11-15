@@ -27,7 +27,10 @@ mod world;
 
 mod game_logic;
 use crate::entity::EntityKind;
-use crate::world::{create_world, Entities, GameObject, ObjectFactory, ObjectGeometries, World};
+use crate::world::{
+    create_world, Entities, GameObject, ObjectFactory, ObjectGeometries, World, GRID_HEIGHT,
+    GRID_WIDTH,
+};
 use game_logic::*;
 use std::collections::HashMap;
 

@@ -4,6 +4,10 @@ use crate::shape::Shape;
 use std::collections::{HashMap, HashSet};
 use std::f32::consts::PI;
 
+// World coordinate bounds
+pub const GRID_WIDTH: u32 = 10000;
+pub const GRID_HEIGHT: u32 = 10000;
+
 /// Aggregate of entity and associated data
 pub type GameObject = (Entity, Shape, Geometry);
 
@@ -96,7 +100,7 @@ pub fn update_geometry(box_geometry: &mut [Vertex], box_state: &Shape) {
 }
 
 /// Builds the box geometry, given its initial state
-fn build_box_geometry(box_state: &Shape) -> [Vertex; 5] {
+fn build_box_geometry(box_state: &Shape) -> Geometry {
     let mut vertices = [(0, 0); 5];
     update_geometry(&mut vertices, box_state);
     vertices
