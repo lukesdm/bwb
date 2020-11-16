@@ -1,4 +1,4 @@
-//! Geometry operations
+//! Geometry and math operations
 
 /// A vector of (x, y)
 pub type Vector = (i32, i32);
@@ -15,7 +15,15 @@ pub type Vertex = Vector;
 /// An interval/range of (Min, Max)
 pub type MinMax = (i32, i32);
 
+/// Object geometry. All objects are boxes (the first vertex is repeated to close the shape).
 pub type Geometry = [Vertex; 5];
+
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
 
 /// Rotate point `p` around center `c` by `angle` radians (in-place)
 /// Based on https://stackoverflow.com/a/2259502
@@ -25,8 +33,6 @@ pub fn rotate(p: &mut P, c: &P, angle: f32) {
 
     let (px, py) = *p;
     let (cx, cy) = c;
-
-    // SHOULDDO: Check if these temp variables are optimized out
 
     // Move point to origin
     let temp_x = (px - cx) as f32;
@@ -145,12 +151,7 @@ pub fn direction_vector(direction: Direction) -> Vector {
     }
 }
 
-pub enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
-}
+
 
 #[cfg(test)]
 mod tests {
