@@ -8,13 +8,19 @@ use std::f32::consts::PI;
 pub const GRID_WIDTH: u32 = 10000;
 pub const GRID_HEIGHT: u32 = 10000;
 
-/// Aggregate of entity and associated data
+/// Aggregate of entity and associated data.
+/// Is a tuple so that each component can be borrowed independently
 pub type GameObject = (Entity, Shape, Geometry);
 
 pub type Entities = HashSet<Entity>;
 pub type Shapes = HashMap<EntityId, Shape>;
 pub type ObjectGeometries = HashMap<EntityId, Geometry>;
 
+/// Map of EntityId to Geometry reference
+pub type GeomRefMap<'a> = HashMap<EntityId, &'a Geometry>;
+
+/// Aggregate of world data components.
+/// Is a tuple so that each component can be borrowed independently.
 pub type World = (Entities, Shapes, ObjectGeometries);
 
 pub fn create_world(level_data: Vec<GameObject>) -> World {
@@ -52,13 +58,22 @@ pub fn get_entity(entities: &Entities, id: EntityId) -> &Entity {
     entities.get(&Entity::from_id(id)).unwrap()
 }
 
-/// Map of EntityId to Geometry reference
-pub type GeomRefMap<'a> = HashMap<EntityId, &'a Geometry>;
+/// Gets the cannon
+pub fn get_cannon(world: &World) -> &Entity {
+    world
+        .0
+        .iter()
+        .find(|e| *e.get_kind() == EntityKind::Cannon)
+        .unwrap()
+}
 
+/// Separates geometry collection by entity kind.
+/// Note: Allocates separate collections (of references)
 pub fn destructure_geom<'a>(
     entities: &'a Entities,
     geometries: &'a ObjectGeometries,
 ) -> (GeomRefMap<'a>, GeomRefMap<'a>, GeomRefMap<'a>) {
+    
     let mut wall_geoms = HashMap::<EntityId, &Geometry>::new();
     let mut baddie_geoms = HashMap::<EntityId, &Geometry>::new();
     let mut bullet_geoms = HashMap::<EntityId, &Geometry>::new();

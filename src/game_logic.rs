@@ -8,9 +8,8 @@
 //! * Bullets are destroyed when they reach edge of screen
 //! * Enemies wrap to the other side of the screen
 
-// TODO: Refactor - some stuff should live elsewhere
 use crate::collision_system::CollisionSystem;
-use crate::entity::{Entity, EntityId, EntityKind};
+use crate::entity::{EntityId, EntityKind};
 use crate::geometry::{direction_vector, Direction, P};
 use crate::shape::Shape;
 use crate::world;
@@ -20,16 +19,8 @@ use crate::world::{
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
-fn get_cannon(world: &World) -> &Entity {
-    world
-        .0
-        .iter()
-        .find(|e| *e.get_kind() == EntityKind::Cannon)
-        .unwrap()
-}
-
 fn get_cannon_pos(world: &World) -> &P {
-    let cannon_id = get_cannon(world).get_id();
+    let cannon_id = world::get_cannon(world).get_id();
     let (_, shapes, _) = world;
     shapes.get(&cannon_id).unwrap().get_center()
 }
@@ -62,8 +53,9 @@ pub fn try_fire(
 }
 
 // (ACTION)
+/// Moves the cannon
 pub fn move_cannon(world: &mut World, direction: Direction) {
-    let cannon_id = get_cannon(world).get_id();
+    let cannon_id = world::get_cannon(world).get_id();
     let shape = world.1.get_mut(&cannon_id).unwrap();
     shape.set_movement(direction);
 }
@@ -162,7 +154,7 @@ fn detect_and_handle_collisions(
         );
         collision_system.process(&wall_geoms, &baddie_geoms, &bullet_geoms);
     }
-    // Union both removal lists
+    // Union the removal lists
     for tr in to_remove_2 {
         to_remove.insert(tr);
     }
@@ -170,9 +162,9 @@ fn detect_and_handle_collisions(
     to_remove
 }
 
-pub fn update_world(mut world: World, dt: i32) -> World {
-    for entity in world.0.iter() {
-        let shape = world.1.get_mut(&entity.get_id()).unwrap();
+fn update_positions(entities: &Entities, shapes: &mut Shapes, dt: i32) {
+    for entity in entities.iter() {
+        let shape = shapes.get_mut(&entity.get_id()).unwrap();
         match entity.get_kind() {
             EntityKind::Baddie => update_pos(shape, dt, true),
             EntityKind::Cannon => update_pos(shape, dt, true),
@@ -181,30 +173,46 @@ pub fn update_world(mut world: World, dt: i32) -> World {
             _ => (),
         }
     }
+}
 
-    // Update geometry ready for collision detection
-    for (id, shape) in world.1.iter() {
-        let geometry = world.2.get_mut(&id).unwrap();
+fn update_geometries(shapes: &Shapes, geometries: &mut ObjectGeometries) {
+    for (id, shape) in shapes.iter() {
+        let geometry = geometries.get_mut(&id).unwrap();
         update_geometry(geometry, shape);
     }
+}
+
+pub fn update_world(mut world: World, dt: i32) -> World {
+    // Update shape state
+    let (entities, mut shapes, geometries) = world;
+    update_positions(&entities, &mut shapes, dt);
+    world = (entities, shapes, geometries);
+
+    // Update geometry ready for collision detection
+    let (entities, shapes, mut geometries) = world;
+    update_geometries(&shapes, &mut geometries);
+    world = (entities, shapes, geometries);
 
     handle_bullet_misses(&mut world);
+    
+    // Detect & handle collisions
     let (entities, mut shapes, geometries) = world;
     let to_remove = detect_and_handle_collisions(&entities, &mut shapes, &geometries);
-
     world = (entities, shapes, geometries);
     for e in to_remove {
         world::remove(&mut world, e);
     }
 
-    world
+    // 2nd pass of geometry update to reflect destroyed/backed-out objects.
+    // Could be more efficient, but so far it's not a bottleneck.
+    let (entities, shapes, mut geometries) = world;
+    update_geometries(&shapes, &mut geometries);
+    world = (entities, shapes, geometries);
 
-    // Could add 2nd pass of geometry update to reflect destroyed objects.
-    // Has side effect of showing objects inside one another, as positions aren't backed-out after collision.
-    // update_geometry_all(game_objects);
+    world
 }
 
-/// Game logic tests. Note: These are currently integration tests, rather than unit tests.
+/// Game logic tests. Note: These are integration tests, rather than unit tests.
 #[cfg(test)]
 mod tests {
     use super::{update_world, GRID_WIDTH};
@@ -241,27 +249,27 @@ mod tests {
         assert_eq!(entities.len(), 2);
         assert!(entities.contains(&Entity::from_id(expected_id_1)));
         assert!(entities.contains(&Entity::from_id(expected_id_2)));
-
-        // TODO: Test case as below, as currently collision detection is too rough to detect correctly (hashing on center only):
-        //let hit_baddie = obj_factory.make_baddie((5000, 5000), (0, 0), 0.0);
-        //let hitting_bullet = obj_factory.make_bullet((4615, 5000), (1, 0));
     }
 
     #[test]
     fn bullet_destroyed_at_screen_edge() {
+        // Arrange
         let obj_factory = world::ObjectFactory::new(1000);
         let world = world::create_world(vec![
             obj_factory.make_bullet((GRID_WIDTH as i32 - 10, 100), (1, 0))
         ]);
         let dt = 20;
 
+        // Act
         let (entities, _, _) = update_world(world, dt);
 
+        // Assert
         assert_eq!(entities.len(), 0);
     }
 
     #[test]
     fn baddies_wrap_at_screen_edge_lr() {
+        // Arrange
         let obj_factory = world::ObjectFactory::new(1000);
         let baddie = obj_factory.make_baddie((GRID_WIDTH as i32 - 10, 1000), (1000, 0), 0.0);
         let baddie_id = baddie.0.get_id();
@@ -269,14 +277,17 @@ mod tests {
         let dt = 20;
         let new_center_expected = (10, 1000);
 
+        // Act
         let (_, shapes, _) = update_world(world, dt);
 
+        // Assert
         let new_center_actual = shapes.get(&baddie_id).unwrap().get_center();
         assert_eq!(*new_center_actual, new_center_expected);
     }
 
     #[test]
     fn baddies_wrap_at_screen_edge_rl() {
+        // Arrange
         let obj_factory = world::ObjectFactory::new(1000);
         let baddie = obj_factory.make_baddie((10, 1000), (-1000, 0), 0.0);
         let baddie_id = baddie.0.get_id();
@@ -284,14 +295,17 @@ mod tests {
         let dt = 20;
         let new_center_expected = (GRID_WIDTH as i32 - 10, 1000);
 
+        // Act
         let (_, shapes, _) = update_world(world, dt);
 
+        // Assert
         let new_center_actual = shapes.get(&baddie_id).unwrap().get_center();
         assert_eq!(*new_center_actual, new_center_expected);
     }
 
     #[test]
     fn baddies_bounce_off_walls() {
+        // Arrange
         let obj_factory = world::ObjectFactory::new(1000);
         let baddie = obj_factory.make_baddie((1000, 1000), (1000, 0), 0.0); // assume size 750 => right edge is at x=1375
         let baddie_id = baddie.0.get_id();

@@ -240,6 +240,13 @@ pub fn main() {
         baddie_speed: 600,
     };
 
+    let level2_params = LevelParams {
+        base_size: 800,
+        sparsity: 8,
+        wall_pc: 25,
+        baddie_speed: 600,
+    };
+
     let level99_params = LevelParams {
         base_size: 100,
         sparsity: 5,
@@ -254,10 +261,11 @@ pub fn main() {
         baddie_speed: 600,
     };
     // TODO: Parameterize
-    let level = 1;
+    let level = 2;
 
     let level_params = match level {
         1 => level1_params,
+        2 => level2_params,
         99 => level99_params,
         -1 => levelxxx_params,
         _ => level1_params,
