@@ -47,6 +47,7 @@ pub fn add(world: &mut World, game_obj: GameObject) {
 }
 
 /// Removes the given entity from the world
+/// Returns the a tuple of last
 pub fn remove(world: &mut World, id: EntityId) {
     let (entities, shapes, geometries) = world;
     geometries.remove(&id);

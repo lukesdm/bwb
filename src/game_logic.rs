@@ -3,6 +3,7 @@
 //! * Bullet meets Enemy => Both destroyed
 //! * Bullet meets Wall => Bullet destroyed
 //! * Enemy meets Wall => Enemy bounces/reverses
+//! * All enemies destroyed => level ends
 
 //! Other rules:
 //! * Bullets are destroyed when they reach edge of screen
@@ -182,7 +183,12 @@ fn update_geometries(shapes: &Shapes, geometries: &mut Geometries) {
     }
 }
 
-pub fn update_world(mut world: World, dt: i32) -> World {
+pub enum LevelState {
+    InProgress,
+    Complete,
+}
+
+pub fn update_world(mut world: World, dt: i32) -> (World, LevelState) {
     // Update shape state
     let (entities, mut shapes, geometries) = world;
     update_positions(&entities, &mut shapes, dt);
@@ -209,7 +215,19 @@ pub fn update_world(mut world: World, dt: i32) -> World {
     update_geometries(&shapes, &mut geometries);
     world = (entities, shapes, geometries);
 
-    world
+    let state = if level_complete(&world) {
+        LevelState::Complete
+    } else {
+        LevelState::InProgress
+    };
+    
+    (world, state)
+}
+
+fn level_complete(world: &World) -> bool {
+    let (entities, _, _) = world;
+    let baddies = entities.iter().filter(|e| e.get_kind() == &EntityKind::Baddie);
+    baddies.count() == 0
 }
 
 /// Game logic tests. Note: These are integration tests, rather than unit tests.
@@ -243,7 +261,7 @@ mod tests {
         ]);
 
         // Act
-        let (entities, _, _) = update_world(world, dt);
+        let ((entities, _, _), _) = update_world(world, dt);
 
         // Assert
         assert_eq!(entities.len(), 2);
@@ -261,7 +279,7 @@ mod tests {
         let dt = 20;
 
         // Act
-        let (entities, _, _) = update_world(world, dt);
+        let ((entities, _, _), _) = update_world(world, dt);
 
         // Assert
         assert_eq!(entities.len(), 0);
@@ -278,7 +296,7 @@ mod tests {
         let new_center_expected = (10, 1000);
 
         // Act
-        let (_, shapes, _) = update_world(world, dt);
+        let ((_, shapes, _), _) = update_world(world, dt);
 
         // Assert
         let new_center_actual = shapes.get(&baddie_id).unwrap().get_center();
@@ -296,7 +314,7 @@ mod tests {
         let new_center_expected = (GRID_WIDTH as i32 - 10, 1000);
 
         // Act
-        let (_, shapes, _) = update_world(world, dt);
+        let ((_, shapes, _), _) = update_world(world, dt);
 
         // Assert
         let new_center_actual = shapes.get(&baddie_id).unwrap().get_center();
@@ -315,7 +333,7 @@ mod tests {
         // Expect baddie to travel 25 to the wall, and then be reversed. Doesn't need to be exact so just check the velocity is reversed.
 
         // Act
-        let (_, shapes, _) = update_world(world, dt);
+        let ((_, shapes, _), _) = update_world(world, dt);
 
         // Assert
         let new_vel = *shapes.get(&baddie_id).unwrap().get_vel();
@@ -339,7 +357,7 @@ mod tests {
         let dt = 20;
 
         // Act
-        let (entities, _, _) = update_world(world, dt);
+        let ((entities, _, _), _) = update_world(world, dt);
 
         // Assert
         assert_eq!(entities.len(), 1);

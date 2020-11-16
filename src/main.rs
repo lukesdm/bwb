@@ -14,6 +14,5 @@ mod shape;
 mod world;
 
 pub fn main() {
-    let (world, obj_factory) = levels::init();
-    engine::run(world, &obj_factory);
+    engine::run(0);
 }

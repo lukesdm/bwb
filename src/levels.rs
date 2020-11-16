@@ -71,7 +71,7 @@ fn build_level0(obj_factory: &ObjectFactory) -> World {
     create_world(level_data)
 }
 
-pub fn init() -> (World, ObjectFactory) {
+pub fn init(level: i32) -> (World, ObjectFactory) {
     let level1_params = LevelParams {
         base_size: 1000,
         sparsity: 10,
@@ -99,8 +99,6 @@ pub fn init() -> (World, ObjectFactory) {
         wall_pc: 20,
         baddie_speed: 600,
     };
-    // TODO: Parameterize
-    let level = 0;
 
     let level_params = match level {
         1 => level1_params,
