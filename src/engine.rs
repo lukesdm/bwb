@@ -5,14 +5,14 @@ use std::time::{Duration, Instant};
 
 use crate::game_logic::{move_cannon, try_fire, update_world};
 use crate::geometry::Direction;
-use crate::render;
+use crate::render::Renderer;
 use crate::world::{ObjectFactory, World};
 
 const MAX_FPS: u32 = 60; // Max FPS. Set this low to observe effects.
 
 pub fn run(mut world: World, obj_factory: &ObjectFactory) {
     let sdl_context = sdl2::init().unwrap();
-    let mut canvas = render::init(&sdl_context);
+    let mut renderer = Renderer::new(&sdl_context);
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     let mut current_time = Instant::now();
@@ -27,7 +27,7 @@ pub fn run(mut world: World, obj_factory: &ObjectFactory) {
 
         world = update_world(world, frame_time);
 
-        render::render(&mut canvas, &world.0, &world.2);
+        renderer.render(&world.0, &world.2);
         for event in event_pump.poll_iter() {
             match event {
                 Event::KeyDown {
@@ -71,7 +71,7 @@ pub fn run(mut world: World, obj_factory: &ObjectFactory) {
             }
         }
 
-        canvas.present();
+        renderer.present();
         // Cap rendering rate. COULDDO: try and calculate more accurately i.e. account for render-time
         let frame_time = Duration::new(0, 1_000_000_000u32 / MAX_FPS);
         ::std::thread::sleep(frame_time);
