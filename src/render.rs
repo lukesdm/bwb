@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::entity::EntityKind;
 use crate::geometry::Vertex;
-use crate::world::{Entities, ObjectGeometries, GRID_HEIGHT, GRID_WIDTH};
+use crate::world::{Entities, Geometries, GRID_HEIGHT, GRID_WIDTH};
 
 // Screen coordinate bounds.
 const WIN_WIDTH: u32 = 600;
@@ -60,7 +60,7 @@ impl Renderer {
     pub fn render(
         &mut self,
         entities: &Entities,
-        geometries: &ObjectGeometries,
+        geometries: &Geometries,
     ) {
         self.canvas.set_draw_color(Color::RGB(0, 0, 0));
         self.canvas.clear();

@@ -14,7 +14,7 @@ use crate::geometry::{direction_vector, Direction, P};
 use crate::shape::Shape;
 use crate::world;
 use crate::world::{
-    update_geometry, Entities, ObjectGeometries, Shapes, World, GRID_HEIGHT, GRID_WIDTH,
+    update_geometry, Entities, Geometries, Shapes, World, GRID_HEIGHT, GRID_WIDTH,
 };
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
@@ -122,7 +122,7 @@ fn handle_bullet_misses(world: &mut World) {
 fn detect_and_handle_collisions(
     entities: &Entities,
     shapes: &mut Shapes,
-    geometries: &ObjectGeometries,
+    geometries: &Geometries,
 ) -> HashSet<EntityId> {
     // Removal collections. Need a separate one for each closure, but they can be merged at the end.
     let mut to_remove = HashSet::<EntityId>::new();
@@ -175,7 +175,7 @@ fn update_positions(entities: &Entities, shapes: &mut Shapes, dt: i32) {
     }
 }
 
-fn update_geometries(shapes: &Shapes, geometries: &mut ObjectGeometries) {
+fn update_geometries(shapes: &Shapes, geometries: &mut Geometries) {
     for (id, shape) in shapes.iter() {
         let geometry = geometries.get_mut(&id).unwrap();
         update_geometry(geometry, shape);

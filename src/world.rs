@@ -14,19 +14,19 @@ pub type GameObject = (Entity, Shape, Geometry);
 
 pub type Entities = HashSet<Entity>;
 pub type Shapes = HashMap<EntityId, Shape>;
-pub type ObjectGeometries = HashMap<EntityId, Geometry>;
+pub type Geometries = HashMap<EntityId, Geometry>;
 
 /// Map of EntityId to Geometry reference
 pub type GeomRefMap<'a> = HashMap<EntityId, &'a Geometry>;
 
 /// Aggregate of world data components.
 /// Is a tuple so that each component can be borrowed independently.
-pub type World = (Entities, Shapes, ObjectGeometries);
+pub type World = (Entities, Shapes, Geometries);
 
 pub fn create_world(level_data: Vec<GameObject>) -> World {
     let mut entities = HashSet::<Entity>::new();
     let mut shapes = HashMap::<EntityId, Shape>::new();
-    let mut geometries = ObjectGeometries::new();
+    let mut geometries = Geometries::new();
 
     for (entity, shape, geometry) in level_data {
         entities.insert(entity);
@@ -71,7 +71,7 @@ pub fn get_cannon(world: &World) -> &Entity {
 /// Note: Allocates separate collections (of references)
 pub fn destructure_geom<'a>(
     entities: &'a Entities,
-    geometries: &'a ObjectGeometries,
+    geometries: &'a Geometries,
 ) -> (GeomRefMap<'a>, GeomRefMap<'a>, GeomRefMap<'a>) {
     
     let mut wall_geoms = HashMap::<EntityId, &Geometry>::new();

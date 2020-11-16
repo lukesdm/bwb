@@ -100,7 +100,7 @@ pub fn init() -> (World, ObjectFactory) {
         baddie_speed: 600,
     };
     // TODO: Parameterize
-    let level = 2;
+    let level = 0;
 
     let level_params = match level {
         1 => level1_params,

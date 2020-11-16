@@ -1,6 +1,6 @@
 use crate::entity::EntityId;
 use crate::geometry::{is_collision, Geometry, Vertex};
-use crate::world::{GRID_HEIGHT, GRID_WIDTH};
+use crate::world::{GRID_HEIGHT, GRID_WIDTH, GeomRefMap};
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 
@@ -8,20 +8,28 @@ use std::iter::FromIterator;
 /// 10000 / 1000 => 10 * 10 grid
 const GRID_BIN_SIZE: i32 = 1000;
 
+/// Represents the different pairs of entity-kinds' collisions we're interested in observing
 #[derive(PartialEq, Hash, Eq)]
 pub enum CollisionKind {
     BaddieWall,
     BulletWall,
     BulletBaddie,
 }
+
+/// Collision handler - called when the collision of the supplied entity kinds is detected.
 pub type CollisionHandler<'a> = Box<dyn 'a + FnMut(EntityId, EntityId) -> ()>;
+
+/// Collision handlers for each entity-kind pair
 pub type CollisionHandlers<'a> = HashMap<CollisionKind, CollisionHandler<'a>>;
+
+/// Colliding object pairs
 type CollisionPairs = HashSet<(EntityId, EntityId)>;
+
+// Detected collisions for each entity-kind pair
 type Collisions = HashMap<CollisionKind, CollisionPairs>;
 type Bins = HashSet<i32>;
 type SpatialMap = HashMap<i32, HashSet<EntityId>>;
 type SpatialIndex = HashMap<EntityId, Bins>;
-type ObjectGeometries<'a> = HashMap<EntityId, &'a Geometry>;
 
 fn calc_bin_count() -> i32 {
     (GRID_WIDTH as i32 / GRID_BIN_SIZE) * (GRID_HEIGHT as i32 / GRID_BIN_SIZE)
@@ -47,7 +55,7 @@ fn grid_hash(vertices: &Geometry) -> Bins {
 }
 
 /// Build map of bin -> object list, and associated index
-fn build_map(geometries: &ObjectGeometries) -> (SpatialMap, SpatialIndex) {
+fn build_map(geometries: &GeomRefMap) -> (SpatialMap, SpatialIndex) {
     let mut object_map = SpatialMap::new();
     let mut object_index = SpatialIndex::new();
     for geometry in geometries {
@@ -86,9 +94,9 @@ pub struct CollisionSystem<'a> {
 
 impl<'a> CollisionSystem<'a> {
     pub fn new(
-        walls: &ObjectGeometries,
-        baddies: &ObjectGeometries,
-        bullets: &ObjectGeometries,
+        walls: &GeomRefMap,
+        baddies: &GeomRefMap,
+        bullets: &GeomRefMap,
         baddie_wall_handler: CollisionHandler<'a>,
         bullet_wall_handler: CollisionHandler<'a>,
         bullet_baddie_handler: CollisionHandler<'a>,
@@ -115,12 +123,7 @@ impl<'a> CollisionSystem<'a> {
     }
 
     /// Check collisions and run appropriate handlers
-    pub fn process(
-        &mut self,
-        walls: &ObjectGeometries,
-        baddies: &ObjectGeometries,
-        bullets: &ObjectGeometries,
-    ) {
+    pub fn process(&mut self, walls: &GeomRefMap, baddies: &GeomRefMap, bullets: &GeomRefMap) {
         let mut collisions = Collisions::new();
         collisions.insert(CollisionKind::BaddieWall, CollisionPairs::new());
         collisions.insert(CollisionKind::BulletBaddie, CollisionPairs::new());
@@ -233,7 +236,7 @@ mod tests {
         let w1_bins_expected = Bins::from_iter([0, 1, 10, 11].iter().cloned());
         let (wall2, _, wall2_geom) = obj_factory.make_wall((1700, 1700));
         let w2_bins_expected = Bins::from_iter([11, 12, 21, 22].iter().cloned());
-        let walls_geoms: ObjectGeometries =
+        let walls_geoms: GeomRefMap =
             [(wall1.get_id(), &wall1_geom), (wall2.get_id(), &wall2_geom)]
                 .iter()
                 .cloned()
@@ -256,7 +259,7 @@ mod tests {
         let obj_factory = ObjectFactory::new(400);
         let (wall1, _, wall1_geom) = obj_factory.make_wall((1200, 1200));
         let (wall2, _, wall2_geom) = obj_factory.make_wall((1700, 1700));
-        let walls_geoms: ObjectGeometries =
+        let walls_geoms: GeomRefMap =
             [(wall1.get_id(), &wall1_geom), (wall2.get_id(), &wall2_geom)]
                 .iter()
                 .cloned()
@@ -266,7 +269,7 @@ mod tests {
         let (baddie1, _, baddie1_geom) = obj_factory.make_baddie((1200, 1200), (0, 0), 0.0);
         // not colliding baddie:
         let (baddie2, _, baddie2_geom) = obj_factory.make_baddie((0, 0), (0, 0), 0.0);
-        let baddies_geoms: ObjectGeometries = [
+        let baddies_geoms: GeomRefMap = [
             (baddie1.get_id(), &baddie1_geom),
             (baddie2.get_id(), &baddie2_geom),
         ]
@@ -280,7 +283,7 @@ mod tests {
                     && !(baddie_id == baddie2.get_id() || wall_id == wall2.get_id())
             )
         };
-        let dummy_geoms = &ObjectGeometries::new();
+        let dummy_geoms = &GeomRefMap::new();
         let dummy_handler = |_: EntityId, _: EntityId| ();
         let mut collision_system = CollisionSystem::new(
             &walls_geoms,
@@ -301,19 +304,18 @@ mod tests {
         // Arrange - 1 wall, 1 baddies, colliding, plus associated baddie_wall_handler
         let obj_factory = ObjectFactory::new(1000);
         let (wall, _, wall_geom) = obj_factory.make_wall((1200, 1200));
-        let walls_geoms: ObjectGeometries = [(wall.get_id(), &wall_geom)].iter().cloned().collect();
+        let walls_geoms: GeomRefMap = [(wall.get_id(), &wall_geom)].iter().cloned().collect();
 
         let (baddie, mut baddie_shape, baddie_geom) =
             obj_factory.make_baddie((1200, 1200), (1000, 0), 0.0);
-        let baddies_geoms: ObjectGeometries =
-            [(baddie.get_id(), &baddie_geom)].iter().cloned().collect();
+        let baddies_geoms: GeomRefMap = [(baddie.get_id(), &baddie_geom)].iter().cloned().collect();
 
         let baddie_wall_handler = |baddie_id: EntityId, wall_id: EntityId| {
             assert_eq!(wall_id, wall.get_id());
             assert_eq!(baddie_id, baddie.get_id());
             baddie_shape.reverse();
         };
-        let dummy_geoms = &ObjectGeometries::new();
+        let dummy_geoms = &GeomRefMap::new();
         let dummy_handler = |_: EntityId, _: EntityId| ();
         // Scope needed here for collision system - need to return borrowed references before assert
         {
