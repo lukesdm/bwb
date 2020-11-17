@@ -47,7 +47,6 @@ pub fn add(world: &mut World, game_obj: GameObject) {
 }
 
 /// Removes the given entity from the world
-/// Returns the a tuple of last
 pub fn remove(world: &mut World, id: EntityId) {
     let (entities, shapes, geometries) = world;
     geometries.remove(&id);
@@ -74,7 +73,6 @@ pub fn destructure_geom<'a>(
     entities: &'a Entities,
     geometries: &'a Geometries,
 ) -> (GeomRefMap<'a>, GeomRefMap<'a>, GeomRefMap<'a>) {
-    
     let mut wall_geoms = HashMap::<EntityId, &Geometry>::new();
     let mut baddie_geoms = HashMap::<EntityId, &Geometry>::new();
     let mut bullet_geoms = HashMap::<EntityId, &Geometry>::new();

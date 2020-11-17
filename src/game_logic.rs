@@ -14,9 +14,7 @@ use crate::entity::{EntityId, EntityKind};
 use crate::geometry::{direction_vector, Direction, P};
 use crate::shape::Shape;
 use crate::world;
-use crate::world::{
-    update_geometry, Entities, Geometries, Shapes, World, GRID_HEIGHT, GRID_WIDTH,
-};
+use crate::world::{update_geometry, Entities, Geometries, Shapes, World, GRID_HEIGHT, GRID_WIDTH};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
@@ -200,7 +198,6 @@ pub fn update_world(mut world: World, dt: i32) -> (World, LevelState) {
     world = (entities, shapes, geometries);
 
     handle_bullet_misses(&mut world);
-    
     // Detect & handle collisions
     let (entities, mut shapes, geometries) = world;
     let to_remove = detect_and_handle_collisions(&entities, &mut shapes, &geometries);
@@ -220,13 +217,14 @@ pub fn update_world(mut world: World, dt: i32) -> (World, LevelState) {
     } else {
         LevelState::InProgress
     };
-    
     (world, state)
 }
 
 fn level_complete(world: &World) -> bool {
     let (entities, _, _) = world;
-    let baddies = entities.iter().filter(|e| e.get_kind() == &EntityKind::Baddie);
+    let baddies = entities
+        .iter()
+        .filter(|e| e.get_kind() == &EntityKind::Baddie);
     baddies.count() == 0
 }
 

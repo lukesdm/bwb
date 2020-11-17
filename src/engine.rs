@@ -4,10 +4,9 @@ use sdl2::keyboard::Keycode;
 use std::time::{Duration, Instant};
 
 use crate::game_logic::{move_cannon, try_fire, update_world, LevelState};
-use crate::levels;
 use crate::geometry::Direction;
+use crate::levels;
 use crate::render::Renderer;
-//use crate::world::{ObjectFactory, World};
 
 const MAX_FPS: u32 = 60; // Max FPS. Set this low to observe effects.
 
@@ -34,8 +33,8 @@ pub fn run(mut curr_level: i32) {
                 let (world_temp, obj_factory_temp) = levels::init(curr_level);
                 world = world_temp;
                 obj_factory = obj_factory_temp;
-            },
-            _ => ()
+            }
+            _ => (),
         };
 
         renderer.render(&world.0, &world.2);
