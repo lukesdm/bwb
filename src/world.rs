@@ -73,7 +73,6 @@ pub fn destructure_geom<'a>(
     entities: &'a Entities,
     geometries: &'a Geometries,
 ) -> (GeomRefMap<'a>, GeomRefMap<'a>, GeomRefMap<'a>) {
-    
     let mut wall_geoms = HashMap::<EntityId, &Geometry>::new();
     let mut baddie_geoms = HashMap::<EntityId, &Geometry>::new();
     let mut bullet_geoms = HashMap::<EntityId, &Geometry>::new();

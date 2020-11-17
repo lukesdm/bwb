@@ -1,5 +1,6 @@
 use crate::world::{create_world, GameObject, ObjectFactory, World, GRID_HEIGHT, GRID_WIDTH};
 use rand::{Rng, SeedableRng, StdRng};
+use std::collections::HashMap;
 
 struct LevelParams {
     /// Base size for the level's objects. 1000 is a good amount
@@ -71,44 +72,68 @@ fn build_level0(obj_factory: &ObjectFactory) -> World {
     create_world(level_data)
 }
 
-pub fn init() -> (World, ObjectFactory) {
-    let level1_params = LevelParams {
-        base_size: 1000,
-        sparsity: 10,
-        wall_pc: 25,
-        baddie_speed: 600,
-    };
+pub fn init(level: i32) -> (World, ObjectFactory) {
+    let level_params: HashMap<i32, LevelParams> = vec![
+        (
+            1,
+            LevelParams {
+                base_size: 1500,
+                sparsity: 25,
+                wall_pc: 90,
+                baddie_speed: 600,
+            },
+        ),
+        (
+            2,
+            LevelParams {
+                base_size: 1500,
+                sparsity: 20,
+                wall_pc: 80,
+                baddie_speed: 600,
+            },
+        ),
+        (
+            3,
+            LevelParams {
+                base_size: 1200,
+                sparsity: 20,
+                wall_pc: 80,
+                baddie_speed: 600,
+            },
+        ),
+        (
+            4,
+            LevelParams {
+                base_size: 800,
+                sparsity: 8,
+                wall_pc: 25,
+                baddie_speed: 600,
+            },
+        ),
+        (
+            99,
+            LevelParams {
+                base_size: 100,
+                sparsity: 5,
+                wall_pc: 20,
+                baddie_speed: 600,
+            },
+        ),
+        (
+            -1,
+            LevelParams {
+                base_size: 20,
+                sparsity: 5,
+                wall_pc: 20,
+                baddie_speed: 600,
+            },
+        ),
+    ]
+    .into_iter()
+    .collect();
 
-    let level2_params = LevelParams {
-        base_size: 800,
-        sparsity: 8,
-        wall_pc: 25,
-        baddie_speed: 600,
-    };
-
-    let level99_params = LevelParams {
-        base_size: 100,
-        sparsity: 5,
-        wall_pc: 20,
-        baddie_speed: 600,
-    };
-
-    let levelxxx_params = LevelParams {
-        base_size: 20,
-        sparsity: 5,
-        wall_pc: 20,
-        baddie_speed: 600,
-    };
-    // TODO: Parameterize
-    let level = 0;
-
-    let level_params = match level {
-        1 => level1_params,
-        2 => level2_params,
-        99 => level99_params,
-        -1 => levelxxx_params,
-        _ => level1_params,
-    };
+    let default_params = level_params.get(&1).unwrap();
+    let level_params = level_params.get(&level).unwrap_or(default_params);
     let obj_factory = ObjectFactory::new(level_params.base_size);
     let world = match level {
         0 => build_level0(&obj_factory),
