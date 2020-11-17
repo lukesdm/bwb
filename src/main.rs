@@ -14,5 +14,5 @@ mod shape;
 mod world;
 
 pub fn main() {
-    engine::run(0);
+    engine::run(1);
 }
