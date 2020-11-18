@@ -8,49 +8,63 @@ use std::f32::consts::PI;
 pub const GRID_WIDTH: u32 = 10000;
 pub const GRID_HEIGHT: u32 = 10000;
 
+pub const PLAYER_HEALTH_MAX: i32 = 3;
+
+pub type Health = i32;
+
 /// Aggregate of entity and associated data.
 /// Is a tuple so that each component can be borrowed independently
-pub type GameObject = (Entity, Shape, Geometry);
+pub type GameObject = (Entity, Shape, Geometry, Option<Health>);
 
 pub type Entities = HashSet<Entity>;
 pub type Shapes = HashMap<EntityId, Shape>;
 pub type Geometries = HashMap<EntityId, Geometry>;
+pub type Healths = HashMap<EntityId, Health>;
 
 /// Map of EntityId to Geometry reference
 pub type GeomRefMap<'a> = HashMap<EntityId, &'a Geometry>;
 
-/// Aggregate of world data components.
-/// Is a tuple so that each component can be borrowed independently.
-pub type World = (Entities, Shapes, Geometries);
+/// Aggregates of world data components.
+/// Are tuples so that each component can be borrowed independently.
+pub type GameObjects = (Entities, Shapes, Geometries, Healths);
+pub type World = GameObjects; // May want to add state here
 
 pub fn create_world(level_data: Vec<GameObject>) -> World {
     let mut entities = HashSet::<Entity>::new();
     let mut shapes = HashMap::<EntityId, Shape>::new();
     let mut geometries = Geometries::new();
+    let mut healths = Healths::new();
 
-    for (entity, shape, geometry) in level_data {
+    for (entity, shape, geometry, health) in level_data {
         entities.insert(entity);
         shapes.insert(entity.get_id(), shape);
         geometries.insert(entity.get_id(), geometry);
+        if let Some(health) = health {
+            healths.insert(entity.get_id(), health);
+        }
     }
 
-    (entities, shapes, geometries)
+    (entities, shapes, geometries, healths)
 }
 
 /// Adds the provided game object to the world
-pub fn add(world: &mut World, game_obj: GameObject) {
-    let (entities, shapes, geometries) = world;
-    let (entity, shape, geometry) = game_obj;
+pub fn add(game_objects: &mut GameObjects, game_obj: GameObject) {
+    let (entities, shapes, geometries, healths) = game_objects;
+    let (entity, shape, geometry, health) = game_obj;
     entities.insert(entity);
     shapes.insert(entity.get_id(), shape);
     geometries.insert(entity.get_id(), geometry);
+    if let Some(health) = health {
+        healths.insert(entity.get_id(), health);
+    }
 }
 
 /// Removes the given entity from the world
-pub fn remove(world: &mut World, id: EntityId) {
-    let (entities, shapes, geometries) = world;
+pub fn remove(game_objects: &mut GameObjects, id: EntityId) {
+    let (entities, shapes, geometries, healths) = game_objects;
     geometries.remove(&id);
     shapes.remove(&id);
+    healths.remove(&id); // TODO: check - any effect if item isn't in there?
     entities.remove(&Entity::from_id(id));
 }
 
@@ -59,12 +73,11 @@ pub fn get_entity(entities: &Entities, id: EntityId) -> &Entity {
 }
 
 /// Gets the cannon
-pub fn get_cannon(world: &World) -> &Entity {
-    world
+pub fn get_cannon(game_objects: &GameObjects) -> Option<&Entity> {
+    game_objects
         .0
         .iter()
         .find(|e| *e.get_kind() == EntityKind::Cannon)
-        .unwrap()
 }
 
 /// Separates geometry collection by entity kind.
@@ -72,10 +85,16 @@ pub fn get_cannon(world: &World) -> &Entity {
 pub fn destructure_geom<'a>(
     entities: &'a Entities,
     geometries: &'a Geometries,
-) -> (GeomRefMap<'a>, GeomRefMap<'a>, GeomRefMap<'a>) {
+) -> (
+    GeomRefMap<'a>,
+    GeomRefMap<'a>,
+    GeomRefMap<'a>,
+    GeomRefMap<'a>,
+) {
     let mut wall_geoms = HashMap::<EntityId, &Geometry>::new();
     let mut baddie_geoms = HashMap::<EntityId, &Geometry>::new();
     let mut bullet_geoms = HashMap::<EntityId, &Geometry>::new();
+    let mut cannon_geoms = HashMap::<EntityId, &Geometry>::new();
     for (entity_id, geom) in geometries.iter() {
         let entity_id = *entity_id;
         let e = get_entity(entities, entity_id);
@@ -89,10 +108,13 @@ pub fn destructure_geom<'a>(
             EntityKind::Bullet => {
                 bullet_geoms.insert(entity_id, geom);
             }
+            EntityKind::Cannon => {
+                cannon_geoms.insert(entity_id, geom);
+            }
             _ => (),
         }
     }
-    (wall_geoms, baddie_geoms, bullet_geoms)
+    (wall_geoms, baddie_geoms, bullet_geoms, cannon_geoms)
 }
 
 /// Updates box geometry according to its state
@@ -141,7 +163,12 @@ impl ObjectFactory {
     pub fn make_cannon(&self, center: P) -> GameObject {
         let shape = Shape::new(center, self.calc_size(CANNON_SIZE), (0, 0), PI / 4.0, 0.0);
         let geom = build_box_geometry(&shape);
-        (Entity::new(EntityKind::Cannon), shape, geom)
+        (
+            Entity::new(EntityKind::Cannon),
+            shape,
+            geom,
+            Some(PLAYER_HEALTH_MAX),
+        )
     }
 
     /// Creates a bullet
@@ -154,19 +181,19 @@ impl ObjectFactory {
             0.0,
         );
         let geom = build_box_geometry(&shape);
-        (Entity::new(EntityKind::Bullet), shape, geom)
+        (Entity::new(EntityKind::Bullet), shape, geom, None)
     }
 
     pub fn make_baddie(&self, start: P, vel: Vector, rotation_speed: f32) -> GameObject {
         let shape = Shape::new(start, self.calc_size(BADDIE_SIZE), vel, 0.0, rotation_speed);
         let geom = build_box_geometry(&shape);
-        (Entity::new(EntityKind::Baddie), shape, geom)
+        (Entity::new(EntityKind::Baddie), shape, geom, None)
     }
 
     pub fn make_wall(&self, center: P) -> GameObject {
         let shape = Shape::new(center, self.calc_size(WALL_SIZE), (0, 0), 0.0, 0.0);
         let geom = build_box_geometry(&shape);
-        (Entity::new(EntityKind::Wall), shape, geom)
+        (Entity::new(EntityKind::Wall), shape, geom, None)
     }
 
     fn calc_size(&self, obj_size: f32) -> u32 {

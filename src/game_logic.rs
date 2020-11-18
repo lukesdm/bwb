@@ -4,23 +4,29 @@
 //! * Bullet meets Wall => Bullet destroyed
 //! * Enemy meets Wall => Enemy bounces/reverses
 //! * All enemies destroyed => level ends
+//! * Enemy meets player => Player health decreases + enemy destroyed
+//! * Player health decreases to 0 => Game Over
 
 //! Other rules:
 //! * Bullets are destroyed when they reach edge of screen
 //! * Enemies wrap to the other side of the screen
+//! * Player health reset at start of level
 
 use crate::collision_system::CollisionSystem;
 use crate::entity::{EntityId, EntityKind};
 use crate::geometry::{direction_vector, Direction, P};
 use crate::shape::Shape;
 use crate::world;
-use crate::world::{update_geometry, Entities, Geometries, Shapes, World, GRID_HEIGHT, GRID_WIDTH};
+use crate::world::{
+    update_geometry, Entities, GameObjects, Geometries, Healths, Shapes, World, GRID_HEIGHT,
+    GRID_WIDTH,
+};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
-fn get_cannon_pos(world: &World) -> &P {
-    let cannon_id = world::get_cannon(world).get_id();
-    let (_, shapes, _) = world;
+fn get_cannon_pos(game_objects: &GameObjects) -> &P {
+    let cannon_id = world::get_cannon(game_objects).unwrap().get_id();
+    let (_, shapes, _, _) = game_objects;
     shapes.get(&cannon_id).unwrap().get_center()
 }
 
@@ -31,19 +37,19 @@ fn get_cannon_pos(world: &World) -> &P {
 pub fn try_fire(
     now: Instant,
     prev: Instant,
-    world: &mut World,
+    game_objects: &mut GameObjects,
     direction: Direction,
     obj_factory: &world::ObjectFactory,
 ) -> Instant {
     // 1 / rate of fire
     const RELOAD_TIME: Duration = Duration::from_millis(1000);
 
-    let cannon_pos = *get_cannon_pos(world);
+    let cannon_pos = *get_cannon_pos(game_objects);
 
     if now > prev + RELOAD_TIME {
         // Fire!!
         world::add(
-            world,
+            game_objects,
             obj_factory.make_bullet(cannon_pos, direction_vector(direction)),
         );
         return now;
@@ -53,9 +59,9 @@ pub fn try_fire(
 
 // (ACTION)
 /// Moves the cannon
-pub fn move_cannon(world: &mut World, direction: Direction) {
-    let cannon_id = world::get_cannon(world).get_id();
-    let shape = world.1.get_mut(&cannon_id).unwrap();
+pub fn move_cannon(game_objects: &mut GameObjects, direction: Direction) {
+    let cannon_id = world::get_cannon(game_objects).unwrap().get_id();
+    let shape = game_objects.1.get_mut(&cannon_id).unwrap();
     shape.set_movement(direction);
 }
 
@@ -99,22 +105,22 @@ fn is_inside_world(point: P) -> bool {
 }
 
 /// Handle when bullets miss i.e. reach edge of world without hitting anything - remove them.
-fn handle_bullet_misses(world: &mut World) {
-    let bullets = world
+fn handle_bullet_misses(game_objects: &mut GameObjects) {
+    let bullets = game_objects
         .0
         .iter()
         .filter(|e| *e.get_kind() == EntityKind::Bullet);
 
     let to_remove: Vec<EntityId> = bullets
         .filter(|b| {
-            let shape = world.1.get(&b.get_id()).unwrap();
+            let shape = game_objects.1.get(&b.get_id()).unwrap();
             !is_inside_world(*shape.get_center())
         })
         .map(|b| b.get_id())
         .collect();
 
     for b in to_remove {
-        world::remove(world, b);
+        world::remove(game_objects, b);
     }
 }
 
@@ -122,10 +128,12 @@ fn detect_and_handle_collisions(
     entities: &Entities,
     shapes: &mut Shapes,
     geometries: &Geometries,
+    healths: &mut Healths,
 ) -> HashSet<EntityId> {
     // Removal collections. Need a separate one for each closure, but they can be merged at the end.
     let mut to_remove = HashSet::<EntityId>::new();
     let mut to_remove_2 = HashSet::<EntityId>::new();
+    let mut to_remove_3 = HashSet::<EntityId>::new();
     {
         let baddie_wall_handler = |baddie_id: EntityId, _wall_id: EntityId| {
             let baddie_shape = shapes.get_mut(&baddie_id).unwrap();
@@ -141,20 +149,33 @@ fn detect_and_handle_collisions(
             to_remove_2.insert(bullet_id);
             to_remove_2.insert(baddie_id);
         };
-        let (wall_geoms, baddie_geoms, bullet_geoms) =
+
+        let cannon_baddie_handler = |cannon_id: EntityId, baddie_id: EntityId| {
+            to_remove_3.insert(baddie_id);
+            let cannon_health = healths.get_mut(&cannon_id).unwrap();
+            let new_health = *cannon_health - 1;
+            *cannon_health = new_health;
+        };
+
+        let (wall_geoms, baddie_geoms, bullet_geoms, cannon_geoms) =
             world::destructure_geom(&entities, &geometries);
         let mut collision_system = CollisionSystem::new(
             &wall_geoms,
             &baddie_geoms,
             &bullet_geoms,
+            &cannon_geoms,
             Box::new(baddie_wall_handler),
             Box::new(bullet_wall_handler),
             Box::new(bullet_baddie_handler),
+            Box::new(cannon_baddie_handler),
         );
-        collision_system.process(&wall_geoms, &baddie_geoms, &bullet_geoms);
+        collision_system.process(&wall_geoms, &baddie_geoms, &bullet_geoms, &cannon_geoms);
     }
     // Union the removal lists
     for tr in to_remove_2 {
+        to_remove.insert(tr);
+    }
+    for tr in to_remove_3 {
         to_remove.insert(tr);
     }
 
@@ -181,38 +202,54 @@ fn update_geometries(shapes: &Shapes, geometries: &mut Geometries) {
     }
 }
 
+/// Gets player health.
+/// Optional as there may not be a player in the world, as in some test cases.
+fn player_health(game_objects: &GameObjects) -> Option<i32> {
+    if let Some(cannon) = world::get_cannon(game_objects) {
+        let cannon_id = cannon.get_id();
+        let (_, _, _, healths) = game_objects;
+        Some(*healths.get(&cannon_id).unwrap())
+    } else {
+        None
+    }
+}
+
+#[derive(Debug)]
 pub enum LevelState {
     InProgress,
     Complete,
+    GameOver,
 }
 
 pub fn update_world(mut world: World, dt: i32) -> (World, LevelState) {
     // Update shape state
-    let (entities, mut shapes, geometries) = world;
+    let (entities, mut shapes, geometries, healths) = world;
     update_positions(&entities, &mut shapes, dt);
-    world = (entities, shapes, geometries);
+    world = (entities, shapes, geometries, healths);
 
     // Update geometry ready for collision detection
-    let (entities, shapes, mut geometries) = world;
+    let (entities, shapes, mut geometries, healths) = world;
     update_geometries(&shapes, &mut geometries);
-    world = (entities, shapes, geometries);
+    world = (entities, shapes, geometries, healths);
 
     handle_bullet_misses(&mut world);
     // Detect & handle collisions
-    let (entities, mut shapes, geometries) = world;
-    let to_remove = detect_and_handle_collisions(&entities, &mut shapes, &geometries);
-    world = (entities, shapes, geometries);
+    let (entities, mut shapes, geometries, mut healths) = world;
+    let to_remove = detect_and_handle_collisions(&entities, &mut shapes, &geometries, &mut healths);
+    world = (entities, shapes, geometries, healths);
     for e in to_remove {
         world::remove(&mut world, e);
     }
 
     // 2nd pass of geometry update to reflect destroyed/backed-out objects.
     // Could be more efficient, but so far it's not a bottleneck.
-    let (entities, shapes, mut geometries) = world;
+    let (entities, shapes, mut geometries, healths) = world;
     update_geometries(&shapes, &mut geometries);
-    world = (entities, shapes, geometries);
+    world = (entities, shapes, geometries, healths);
 
-    let state = if level_complete(&world) {
+    let state = if player_health(&world) == Some(0) {
+        LevelState::GameOver
+    } else if level_complete(&world) {
         LevelState::Complete
     } else {
         LevelState::InProgress
@@ -221,7 +258,7 @@ pub fn update_world(mut world: World, dt: i32) -> (World, LevelState) {
 }
 
 fn level_complete(world: &World) -> bool {
-    let (entities, _, _) = world;
+    let (entities, _, _, _) = world;
     let baddies = entities
         .iter()
         .filter(|e| e.get_kind() == &EntityKind::Baddie);
@@ -231,7 +268,7 @@ fn level_complete(world: &World) -> bool {
 /// Game logic tests. Note: These are integration tests, rather than unit tests.
 #[cfg(test)]
 mod tests {
-    use super::{update_world, GRID_WIDTH};
+    use super::{update_world, LevelState, GRID_WIDTH};
     use crate::entity::Entity;
     use crate::world;
     #[test]
@@ -259,7 +296,7 @@ mod tests {
         ]);
 
         // Act
-        let ((entities, _, _), _) = update_world(world, dt);
+        let ((entities, _, _, _), _) = update_world(world, dt);
 
         // Assert
         assert_eq!(entities.len(), 2);
@@ -277,7 +314,7 @@ mod tests {
         let dt = 20;
 
         // Act
-        let ((entities, _, _), _) = update_world(world, dt);
+        let ((entities, _, _, _), _) = update_world(world, dt);
 
         // Assert
         assert_eq!(entities.len(), 0);
@@ -294,7 +331,7 @@ mod tests {
         let new_center_expected = (10, 1000);
 
         // Act
-        let ((_, shapes, _), _) = update_world(world, dt);
+        let ((_, shapes, _, _), _) = update_world(world, dt);
 
         // Assert
         let new_center_actual = shapes.get(&baddie_id).unwrap().get_center();
@@ -312,7 +349,7 @@ mod tests {
         let new_center_expected = (GRID_WIDTH as i32 - 10, 1000);
 
         // Act
-        let ((_, shapes, _), _) = update_world(world, dt);
+        let ((_, shapes, _, _), _) = update_world(world, dt);
 
         // Assert
         let new_center_actual = shapes.get(&baddie_id).unwrap().get_center();
@@ -331,7 +368,7 @@ mod tests {
         // Expect baddie to travel 25 to the wall, and then be reversed. Doesn't need to be exact so just check the velocity is reversed.
 
         // Act
-        let ((_, shapes, _), _) = update_world(world, dt);
+        let ((_, shapes, _, _), _) = update_world(world, dt);
 
         // Assert
         let new_vel = *shapes.get(&baddie_id).unwrap().get_vel();
@@ -355,10 +392,69 @@ mod tests {
         let dt = 20;
 
         // Act
-        let ((entities, _, _), _) = update_world(world, dt);
+        let ((entities, _, _, _), _) = update_world(world, dt);
 
         // Assert
         assert_eq!(entities.len(), 1);
         assert!(entities.contains(&Entity::from_id(bullet_id)) == false);
+    }
+
+    #[test]
+    fn baddie_destroyed_by_cannon() {
+        // Arrange
+        let obj_factory = world::ObjectFactory::new(1000);
+        let cannon = obj_factory.make_cannon((1000, 1000));
+        let baddie = obj_factory.make_baddie((1000, 1000), (0, 0), 0.0);
+        let baddie_id = baddie.0.get_id();
+        let world = world::create_world(vec![cannon, baddie]);
+
+        let dt = 20;
+
+        // Act
+        let ((entities, _, _, _), _) = update_world(world, dt);
+
+        // Assert
+        assert_eq!(entities.len(), 1);
+        assert!(entities.contains(&Entity::from_id(baddie_id)) == false);
+    }
+
+    #[test]
+    fn cannon_damaged_by_baddie() {
+        // Arrange
+        let obj_factory = world::ObjectFactory::new(1000);
+        let cannon = obj_factory.make_cannon((1000, 1000));
+        let cannon_id = cannon.0.get_id();
+        let baddie = obj_factory.make_baddie((1000, 1000), (0, 0), 0.0);
+        let world = world::create_world(vec![cannon, baddie]);
+        let expected_health_change = -1;
+
+        let dt = 20;
+
+        // Act
+        let health_before = *world.3.get(&cannon_id).unwrap();
+        let ((_, _, _, healths), _) = update_world(world, dt);
+        let health_after = healths.get(&cannon_id).unwrap();
+
+        // Assert
+        assert_eq!(health_after - health_before, expected_health_change);
+    }
+    #[test]
+    fn gameover_at_zero_health() {
+        // Arrange - init world with cannon/players health at 0.
+        let obj_factory = world::ObjectFactory::new(1000);
+        let cannon = obj_factory.make_cannon((1000, 1000));
+        let (entity, shape, geometry, _) = cannon;
+        let cannon = (entity, shape, geometry, Some(0));
+        let world = world::create_world(vec![cannon]);
+
+        // Act
+        let (_, level_state) = update_world(world, 10);
+
+        // Assert
+        let gameover = match level_state {
+            LevelState::GameOver => true,
+            _ => false,
+        };
+        assert!(gameover);
     }
 }

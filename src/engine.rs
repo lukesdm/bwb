@@ -27,17 +27,30 @@ pub fn run(mut curr_level: i32) {
 
         let (world_temp, level_state) = update_world(world, frame_time);
         world = world_temp;
-        match level_state {
-            LevelState::Complete => {
-                curr_level += 1;
-                let (world_temp, obj_factory_temp) = levels::init(curr_level);
-                world = world_temp;
-                obj_factory = obj_factory_temp;
-            }
-            _ => (),
-        };
 
-        renderer.render(&world.0, &world.2);
+        // Gameover logic
+        let game_over = match level_state {
+            LevelState::GameOver => true,
+            _ => false,
+        };
+        if game_over {
+            // TODO: gameover screen
+            break 'running;
+        }
+
+        // Level completion logic
+        let level_complete = match level_state {
+            LevelState::Complete => true,
+            _ => false,
+        };
+        if level_complete {
+            curr_level += 1;
+            let (world_temp, obj_factory_temp) = levels::init(curr_level);
+            world = world_temp;
+            obj_factory = obj_factory_temp;
+        }
+
+        renderer.render(&world.0, &world.2, &world.3);
         for event in event_pump.poll_iter() {
             match event {
                 Event::KeyDown {
