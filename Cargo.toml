@@ -9,3 +9,6 @@ edition = "2018"
 [dependencies]
 sdl2 = "0.34.3"
 rand = "0.4.2"
+
+[profile.release]
+debug = true
