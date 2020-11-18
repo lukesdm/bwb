@@ -1,6 +1,6 @@
 use crate::entity::EntityId;
 use crate::geometry::{is_collision, Geometry, Vertex};
-use crate::world::{GRID_HEIGHT, GRID_WIDTH, GeomRefMap};
+use crate::world::{GeomRefMap, GRID_HEIGHT, GRID_WIDTH};
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 
@@ -14,6 +14,7 @@ pub enum CollisionKind {
     BaddieWall,
     BulletWall,
     BulletBaddie,
+    BaddieCannon,
 }
 
 /// Collision handler - called when the collision of the supplied entity kinds is detected.
@@ -89,6 +90,9 @@ pub struct CollisionSystem<'a> {
     bullet_map: SpatialMap,
     #[allow(unused)]
     bullet_index: SpatialIndex,
+    cannon_map: SpatialMap,
+    #[allow(unused)]
+    cannon_index: SpatialIndex,
     handlers: CollisionHandlers<'a>,
 }
 
@@ -97,19 +101,23 @@ impl<'a> CollisionSystem<'a> {
         walls: &GeomRefMap,
         baddies: &GeomRefMap,
         bullets: &GeomRefMap,
+        cannons: &GeomRefMap,
         baddie_wall_handler: CollisionHandler<'a>,
         bullet_wall_handler: CollisionHandler<'a>,
         bullet_baddie_handler: CollisionHandler<'a>,
+        baddie_cannon_handler: CollisionHandler<'a>,
     ) -> Self {
         // build hashmaps from object geometries
         let (wall_map, wall_index) = build_map(walls);
         let (baddie_map, baddie_index) = build_map(baddies);
         let (bullet_map, bullet_index) = build_map(bullets);
+        let (cannon_map, cannon_index) = build_map(cannons);
 
         let mut handlers = CollisionHandlers::new();
         handlers.insert(CollisionKind::BaddieWall, baddie_wall_handler);
         handlers.insert(CollisionKind::BulletBaddie, bullet_baddie_handler);
         handlers.insert(CollisionKind::BulletWall, bullet_wall_handler);
+        handlers.insert(CollisionKind::BaddieCannon, baddie_cannon_handler);
 
         Self {
             wall_map,
@@ -118,16 +126,25 @@ impl<'a> CollisionSystem<'a> {
             baddie_index,
             bullet_map,
             bullet_index,
+            cannon_map,
+            cannon_index,
             handlers,
         }
     }
 
     /// Check collisions and run appropriate handlers
-    pub fn process(&mut self, walls: &GeomRefMap, baddies: &GeomRefMap, bullets: &GeomRefMap) {
+    pub fn process(
+        &mut self,
+        walls: &GeomRefMap,
+        baddies: &GeomRefMap,
+        bullets: &GeomRefMap,
+        cannons: &GeomRefMap,
+    ) {
         let mut collisions = Collisions::new();
         collisions.insert(CollisionKind::BaddieWall, CollisionPairs::new());
         collisions.insert(CollisionKind::BulletBaddie, CollisionPairs::new());
         collisions.insert(CollisionKind::BulletWall, CollisionPairs::new());
+        collisions.insert(CollisionKind::BaddieCannon, CollisionPairs::new());
 
         let bin_count = calc_bin_count();
         for i in 0..bin_count {
@@ -148,7 +165,6 @@ impl<'a> CollisionSystem<'a> {
                     }
                 }
             }
-
             // Bullets...
             if let Some(bullet_ids) = self.bullet_map.get(&i) {
                 for bullet_id in bullet_ids {
@@ -165,7 +181,6 @@ impl<'a> CollisionSystem<'a> {
                             }
                         }
                     }
-
                     // ... vs Baddies
                     if let Some(baddie_ids) = self.baddie_map.get(&i) {
                         for baddie_id in baddie_ids {
@@ -176,6 +191,23 @@ impl<'a> CollisionSystem<'a> {
                                     .get_mut(&CollisionKind::BulletBaddie)
                                     .unwrap()
                                     .insert((*bullet_id, *baddie_id));
+                            }
+                        }
+                    }
+                }
+            }
+            // Cannons vs baddies
+            if let Some(cannon_ids) = self.cannon_map.get(&i) {
+                for cannon_id in cannon_ids {
+                    if let Some(baddie_ids) = self.baddie_map.get(&i) {
+                        for baddie_id in baddie_ids {
+                            let cannon_geom = cannons.get(cannon_id).unwrap();
+                            let baddie_geom = baddies.get(baddie_id).unwrap();
+                            if is_collision(*cannon_geom, *baddie_geom) {
+                                collisions
+                                    .get_mut(&CollisionKind::BaddieCannon)
+                                    .unwrap()
+                                    .insert((*cannon_id, *baddie_id));
                             }
                         }
                     }
@@ -232,9 +264,9 @@ mod tests {
     fn build_map_2walls_some_common_bins() {
         // Arrange - 2 walls in bin 11
         let obj_factory = ObjectFactory::new(1000);
-        let (wall1, _, wall1_geom) = obj_factory.make_wall((1200, 1200));
+        let (wall1, _, wall1_geom, _) = obj_factory.make_wall((1200, 1200));
         let w1_bins_expected = Bins::from_iter([0, 1, 10, 11].iter().cloned());
-        let (wall2, _, wall2_geom) = obj_factory.make_wall((1700, 1700));
+        let (wall2, _, wall2_geom, _) = obj_factory.make_wall((1700, 1700));
         let w2_bins_expected = Bins::from_iter([11, 12, 21, 22].iter().cloned());
         let walls_geoms: GeomRefMap =
             [(wall1.get_id(), &wall1_geom), (wall2.get_id(), &wall2_geom)]
@@ -257,8 +289,8 @@ mod tests {
     fn collision_static_simple() {
         // Arrange - 2 walls, 2 baddies, 1 of each colliding, plus associated handler
         let obj_factory = ObjectFactory::new(400);
-        let (wall1, _, wall1_geom) = obj_factory.make_wall((1200, 1200));
-        let (wall2, _, wall2_geom) = obj_factory.make_wall((1700, 1700));
+        let (wall1, _, wall1_geom, _) = obj_factory.make_wall((1200, 1200));
+        let (wall2, _, wall2_geom, _) = obj_factory.make_wall((1700, 1700));
         let walls_geoms: GeomRefMap =
             [(wall1.get_id(), &wall1_geom), (wall2.get_id(), &wall2_geom)]
                 .iter()
@@ -266,9 +298,9 @@ mod tests {
                 .collect();
 
         // colliding baddie:
-        let (baddie1, _, baddie1_geom) = obj_factory.make_baddie((1200, 1200), (0, 0), 0.0);
+        let (baddie1, _, baddie1_geom, _) = obj_factory.make_baddie((1200, 1200), (0, 0), 0.0);
         // not colliding baddie:
-        let (baddie2, _, baddie2_geom) = obj_factory.make_baddie((0, 0), (0, 0), 0.0);
+        let (baddie2, _, baddie2_geom, _) = obj_factory.make_baddie((0, 0), (0, 0), 0.0);
         let baddies_geoms: GeomRefMap = [
             (baddie1.get_id(), &baddie1_geom),
             (baddie2.get_id(), &baddie2_geom),
@@ -289,12 +321,14 @@ mod tests {
             &walls_geoms,
             &baddies_geoms,
             &dummy_geoms,
+            &dummy_geoms,
             Box::new(baddie_wall_handler),
+            Box::new(dummy_handler),
             Box::new(dummy_handler),
             Box::new(dummy_handler),
         );
         // Act
-        collision_system.process(&walls_geoms, &baddies_geoms, &dummy_geoms);
+        collision_system.process(&walls_geoms, &baddies_geoms, &dummy_geoms, &dummy_geoms);
 
         // Assert - see handler, above
     }
@@ -303,10 +337,10 @@ mod tests {
     fn collision_can_mutate_baddie() {
         // Arrange - 1 wall, 1 baddies, colliding, plus associated baddie_wall_handler
         let obj_factory = ObjectFactory::new(1000);
-        let (wall, _, wall_geom) = obj_factory.make_wall((1200, 1200));
+        let (wall, _, wall_geom, _) = obj_factory.make_wall((1200, 1200));
         let walls_geoms: GeomRefMap = [(wall.get_id(), &wall_geom)].iter().cloned().collect();
 
-        let (baddie, mut baddie_shape, baddie_geom) =
+        let (baddie, mut baddie_shape, baddie_geom, _) =
             obj_factory.make_baddie((1200, 1200), (1000, 0), 0.0);
         let baddies_geoms: GeomRefMap = [(baddie.get_id(), &baddie_geom)].iter().cloned().collect();
 
@@ -323,12 +357,14 @@ mod tests {
                 &walls_geoms,
                 &baddies_geoms,
                 &dummy_geoms,
+                &dummy_geoms,
                 Box::new(baddie_wall_handler),
+                Box::new(dummy_handler),
                 Box::new(dummy_handler),
                 Box::new(dummy_handler),
             );
             // Act
-            collision_system.process(&walls_geoms, &baddies_geoms, &dummy_geoms);
+            collision_system.process(&walls_geoms, &baddies_geoms, &dummy_geoms, &dummy_geoms);
         }
 
         // Assert
