@@ -50,7 +50,7 @@ pub fn run(mut curr_level: i32) {
             obj_factory = obj_factory_temp;
         }
 
-        renderer.render(&world.0, &world.2);
+        renderer.render(&world.0, &world.2, &world.3);
         for event in event_pump.poll_iter() {
             match event {
                 Event::KeyDown {
