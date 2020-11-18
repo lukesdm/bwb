@@ -12,6 +12,9 @@ struct LevelParams {
 
     /// Max baddie speed, in units per second. 1000 is a good amount.
     baddie_speed: u32,
+
+    /// Whether this is a test level (see usages for what effects this has)
+    test: bool
 }
 
 /// Procedurally generates level data.
@@ -26,7 +29,11 @@ fn build_level(obj_factory: &ObjectFactory, level_params: &LevelParams) -> World
     let seed: &[_] = &[1, 2, 3, 4];
     let mut rng: StdRng = SeedableRng::from_seed(seed);
     let mut next_random = |lower, upper| rng.gen_range(lower, upper + 1);
-    level_data.push(obj_factory.make_cannon((GRID_WIDTH as i32 / 2, GRID_HEIGHT as i32 / 2)));
+    let mut cannon = obj_factory.make_cannon((GRID_WIDTH as i32 / 2, GRID_HEIGHT as i32 / 2));
+    if level_params.test {
+        cannon.3 = Some(1000);
+    }
+    level_data.push(cannon);
 
     let mut curr_y = 0;
     while curr_y < GRID_HEIGHT {
@@ -81,6 +88,7 @@ pub fn init(level: i32) -> (World, ObjectFactory) {
                 sparsity: 25,
                 wall_pc: 90,
                 baddie_speed: 600,
+                test: false
             },
         ),
         (
@@ -90,6 +98,7 @@ pub fn init(level: i32) -> (World, ObjectFactory) {
                 sparsity: 20,
                 wall_pc: 80,
                 baddie_speed: 600,
+                test: false,
             },
         ),
         (
@@ -99,6 +108,7 @@ pub fn init(level: i32) -> (World, ObjectFactory) {
                 sparsity: 20,
                 wall_pc: 80,
                 baddie_speed: 600,
+                test: false,
             },
         ),
         (
@@ -108,6 +118,7 @@ pub fn init(level: i32) -> (World, ObjectFactory) {
                 sparsity: 8,
                 wall_pc: 25,
                 baddie_speed: 600,
+                test: false,
             },
         ),
         (
@@ -117,6 +128,7 @@ pub fn init(level: i32) -> (World, ObjectFactory) {
                 sparsity: 5,
                 wall_pc: 20,
                 baddie_speed: 600,
+                test: true,
             },
         ),
         (
@@ -126,6 +138,7 @@ pub fn init(level: i32) -> (World, ObjectFactory) {
                 sparsity: 5,
                 wall_pc: 20,
                 baddie_speed: 600,
+                test: true,
             },
         ),
     ]

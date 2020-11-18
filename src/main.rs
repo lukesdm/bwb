@@ -1,6 +1,7 @@
 //! # Bullets, Walls and Baddies v1  
 
 extern crate sdl2;
+extern crate rayon;
 
 mod collision_system;
 mod engine;
@@ -14,5 +15,5 @@ mod shape;
 mod world;
 
 pub fn main() {
-    engine::run(1);
+    engine::run(99);
 }
