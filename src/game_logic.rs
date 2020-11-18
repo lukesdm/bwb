@@ -25,7 +25,7 @@ use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 fn get_cannon_pos(game_objects: &GameObjects) -> &P {
-    let cannon_id = world::get_cannon(game_objects).get_id();
+    let cannon_id = world::get_cannon(game_objects).unwrap().get_id();
     let (_, shapes, _, _) = game_objects;
     shapes.get(&cannon_id).unwrap().get_center()
 }
@@ -60,7 +60,7 @@ pub fn try_fire(
 // (ACTION)
 /// Moves the cannon
 pub fn move_cannon(game_objects: &mut GameObjects, direction: Direction) {
-    let cannon_id = world::get_cannon(game_objects).get_id();
+    let cannon_id = world::get_cannon(game_objects).unwrap().get_id();
     let shape = game_objects.1.get_mut(&cannon_id).unwrap();
     shape.set_movement(direction);
 }
@@ -202,6 +202,18 @@ fn update_geometries(shapes: &Shapes, geometries: &mut Geometries) {
     }
 }
 
+/// Gets player health.
+/// Optional as there may not be a player in the world, as in some test cases.
+fn player_health(game_objects: &GameObjects) -> Option<i32> {
+    if let Some(cannon) = world::get_cannon(game_objects) {
+        let cannon_id = cannon.get_id();
+        let (_, _, _, healths) = game_objects;
+        Some(*healths.get(&cannon_id).unwrap())
+    } else {
+        None
+    }
+}
+
 #[derive(Debug)]
 pub enum LevelState {
     InProgress,
@@ -235,7 +247,9 @@ pub fn update_world(mut world: World, dt: i32) -> (World, LevelState) {
     update_geometries(&shapes, &mut geometries);
     world = (entities, shapes, geometries, healths);
 
-    let state = if level_complete(&world) {
+    let state = if player_health(&world) == Some(0) {
+        LevelState::GameOver
+    } else if level_complete(&world) {
         LevelState::Complete
     } else {
         LevelState::InProgress
@@ -426,16 +440,17 @@ mod tests {
     }
     #[test]
     fn gameover_at_zero_health() {
-        // Arrange - trigger collision which results in players health to go to 0.
+        // Arrange - init world with cannon/players health at 0.
         let obj_factory = world::ObjectFactory::new(1000);
         let cannon = obj_factory.make_cannon((1000, 1000));
         let (entity, shape, geometry, _) = cannon;
-        let cannon = (entity, shape, geometry, Some(1));
-        let baddie = obj_factory.make_baddie((1000, 1000), (0, 0), 0.0);
-        let world = world::create_world(vec![cannon, baddie]);
+        let cannon = (entity, shape, geometry, Some(0));
+        let world = world::create_world(vec![cannon]);
 
+        // Act
         let (_, level_state) = update_world(world, 10);
 
+        // Assert
         let gameover = match level_state {
             LevelState::GameOver => true,
             _ => false,

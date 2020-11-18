@@ -27,7 +27,7 @@ pub type GeomRefMap<'a> = HashMap<EntityId, &'a Geometry>;
 /// Aggregates of world data components.
 /// Are tuples so that each component can be borrowed independently.
 pub type GameObjects = (Entities, Shapes, Geometries, Healths);
-pub type World = GameObjects;
+pub type World = GameObjects; // May want to add state here
 
 pub fn create_world(level_data: Vec<GameObject>) -> World {
     let mut entities = HashSet::<Entity>::new();
@@ -73,12 +73,11 @@ pub fn get_entity(entities: &Entities, id: EntityId) -> &Entity {
 }
 
 /// Gets the cannon
-pub fn get_cannon(game_objects: &GameObjects) -> &Entity {
+pub fn get_cannon(game_objects: &GameObjects) -> Option<&Entity> {
     game_objects
         .0
         .iter()
         .find(|e| *e.get_kind() == EntityKind::Cannon)
-        .unwrap()
 }
 
 /// Separates geometry collection by entity kind.
