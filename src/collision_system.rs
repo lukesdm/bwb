@@ -140,15 +140,15 @@ impl<'a> CollisionSystem<'a> {
         bullets: &GeomRefMap,
         cannons: &GeomRefMap,
     ) {
-        let mut collisions = Collisions::new();
-        collisions.insert(CollisionKind::BaddieWall, CollisionPairs::new());
-        collisions.insert(CollisionKind::BulletBaddie, CollisionPairs::new());
-        collisions.insert(CollisionKind::BulletWall, CollisionPairs::new());
-        collisions.insert(CollisionKind::BaddieCannon, CollisionPairs::new());
-
         let bin_count = calc_bin_count();
-        for i in 0..bin_count {
-            // Walls vs Baddies
+
+        let mut collisions_init = Collisions::new();
+        collisions_init.insert(CollisionKind::BaddieWall, CollisionPairs::new());
+        collisions_init.insert(CollisionKind::BulletBaddie, CollisionPairs::new());
+        collisions_init.insert(CollisionKind::BulletWall, CollisionPairs::new());
+        collisions_init.insert(CollisionKind::BaddieCannon, CollisionPairs::new());
+        
+        let collisions = (0..bin_count).fold(collisions_init, |mut collisions_acc, i| {
             if let Some(wall_ids) = self.wall_map.get(&i) {
                 if let Some(baddie_ids) = self.baddie_map.get(&i) {
                     for wall_id in wall_ids {
@@ -156,7 +156,7 @@ impl<'a> CollisionSystem<'a> {
                             let wall_geom = walls.get(wall_id).unwrap();
                             let baddie_geom = baddies.get(baddie_id).unwrap();
                             if is_collision(*wall_geom, *baddie_geom) {
-                                collisions
+                                collisions_acc
                                     .get_mut(&CollisionKind::BaddieWall)
                                     .unwrap()
                                     .insert((*baddie_id, *wall_id));
@@ -174,7 +174,7 @@ impl<'a> CollisionSystem<'a> {
                             let bullet_geom = bullets.get(bullet_id).unwrap();
                             let wall_geom = walls.get(wall_id).unwrap();
                             if is_collision(*bullet_geom, *wall_geom) {
-                                collisions
+                                collisions_acc
                                     .get_mut(&CollisionKind::BulletWall)
                                     .unwrap()
                                     .insert((*bullet_id, *wall_id));
@@ -187,7 +187,7 @@ impl<'a> CollisionSystem<'a> {
                             let bullet_geom = bullets.get(bullet_id).unwrap();
                             let baddie_geom = baddies.get(baddie_id).unwrap();
                             if is_collision(*bullet_geom, *baddie_geom) {
-                                collisions
+                                collisions_acc
                                     .get_mut(&CollisionKind::BulletBaddie)
                                     .unwrap()
                                     .insert((*bullet_id, *baddie_id));
@@ -204,7 +204,7 @@ impl<'a> CollisionSystem<'a> {
                             let cannon_geom = cannons.get(cannon_id).unwrap();
                             let baddie_geom = baddies.get(baddie_id).unwrap();
                             if is_collision(*cannon_geom, *baddie_geom) {
-                                collisions
+                                collisions_acc
                                     .get_mut(&CollisionKind::BaddieCannon)
                                     .unwrap()
                                     .insert((*cannon_id, *baddie_id));
@@ -213,8 +213,10 @@ impl<'a> CollisionSystem<'a> {
                     }
                 }
             }
-        }
+            collisions_acc
+        });
 
+        // Can't parallelize this because the closures close over mutable data.
         for (collision_kind, collision_pairs) in collisions {
             for collision_pair in collision_pairs {
                 let handler = self.handlers.get_mut(&collision_kind).unwrap();
