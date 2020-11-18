@@ -1,6 +1,7 @@
 use crate::entity::EntityId;
 use crate::geometry::{is_collision, Geometry, Vertex};
 use crate::world::{GeomRefMap, GRID_HEIGHT, GRID_WIDTH};
+use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 
@@ -79,6 +80,118 @@ fn build_map(geometries: &GeomRefMap) -> (SpatialMap, SpatialIndex) {
     (object_map, object_index)
 }
 
+fn detect_collisions(
+    walls: (&SpatialMap, &GeomRefMap),
+    baddies: (&SpatialMap, &GeomRefMap),
+    bullets: (&SpatialMap, &GeomRefMap),
+    cannons: (&SpatialMap, &GeomRefMap), 
+) -> Collisions {
+    let (wall_map, wall_geoms) = walls;
+    let (baddie_map, baddie_geoms) = baddies;
+    let (bullet_map, bullet_geoms) = bullets;
+    let (cannon_map, cannon_geoms) = cannons;
+    let bin_count = calc_bin_count();
+    let init = || {
+        let mut collisions_init = Collisions::new();
+        collisions_init.insert(CollisionKind::BaddieWall, CollisionPairs::new());
+        collisions_init.insert(CollisionKind::BulletBaddie, CollisionPairs::new());
+        collisions_init.insert(CollisionKind::BulletWall, CollisionPairs::new());
+        collisions_init.insert(CollisionKind::BaddieCannon, CollisionPairs::new());
+        collisions_init
+    };
+
+    let collisions = (0..bin_count)
+        .into_par_iter()
+        .fold(init, |mut collisions_acc, i| {
+            if let Some(wall_ids) = wall_map.get(&i) {
+                if let Some(baddie_ids) = baddie_map.get(&i) {
+                    for wall_id in wall_ids {
+                        for baddie_id in baddie_ids {
+                            let wall_geom = wall_geoms.get(wall_id).unwrap();
+                            let baddie_geom = baddie_geoms.get(baddie_id).unwrap();
+                            if is_collision(*wall_geom, *baddie_geom) {
+                                collisions_acc
+                                    .get_mut(&CollisionKind::BaddieWall)
+                                    .unwrap()
+                                    .insert((*baddie_id, *wall_id));
+                            }
+                        }
+                    }
+                }
+            }
+            // Bullets...
+            if let Some(bullet_ids) = bullet_map.get(&i) {
+                for bullet_id in bullet_ids {
+                    // ... vs Walls
+                    if let Some(wall_ids) = wall_map.get(&i) {
+                        for wall_id in wall_ids {
+                            let bullet_geom = bullet_geoms.get(bullet_id).unwrap();
+                            let wall_geom = wall_geoms.get(wall_id).unwrap();
+                            if is_collision(*bullet_geom, *wall_geom) {
+                                collisions_acc
+                                    .get_mut(&CollisionKind::BulletWall)
+                                    .unwrap()
+                                    .insert((*bullet_id, *wall_id));
+                            }
+                        }
+                    }
+                    // ... vs Baddies
+                    if let Some(baddie_ids) = baddie_map.get(&i) {
+                        for baddie_id in baddie_ids {
+                            let bullet_geom = bullet_geoms.get(bullet_id).unwrap();
+                            let baddie_geom = baddie_geoms.get(baddie_id).unwrap();
+                            if is_collision(*bullet_geom, *baddie_geom) {
+                                collisions_acc
+                                    .get_mut(&CollisionKind::BulletBaddie)
+                                    .unwrap()
+                                    .insert((*bullet_id, *baddie_id));
+                            }
+                        }
+                    }
+                }
+            }
+            // Cannons vs baddies
+            if let Some(cannon_ids) = cannon_map.get(&i) {
+                for cannon_id in cannon_ids {
+                    if let Some(baddie_ids) = baddie_map.get(&i) {
+                        for baddie_id in baddie_ids {
+                            let cannon_geom = cannon_geoms.get(cannon_id).unwrap();
+                            let baddie_geom = baddie_geoms.get(baddie_id).unwrap();
+                            if is_collision(*cannon_geom, *baddie_geom) {
+                                collisions_acc
+                                    .get_mut(&CollisionKind::BaddieCannon)
+                                    .unwrap()
+                                    .insert((*cannon_id, *baddie_id));
+                            }
+                        }
+                    }
+                }
+            }
+            collisions_acc
+        })
+        // Stitch together sub-collections
+        .reduce(
+            || {
+                let mut collisions_init = Collisions::new();
+                collisions_init.insert(CollisionKind::BaddieWall, CollisionPairs::new());
+                collisions_init.insert(CollisionKind::BulletBaddie, CollisionPairs::new());
+                collisions_init.insert(CollisionKind::BulletWall, CollisionPairs::new());
+                collisions_init.insert(CollisionKind::BaddieCannon, CollisionPairs::new());
+                collisions_init
+            },
+            |mut acc, c_sub| {
+                for (collision_kind, entries) in c_sub {
+                    let acc_collisionpairs = acc.get_mut(&collision_kind).unwrap();
+                    for collision in entries {
+                        acc_collisionpairs.insert(collision);
+                    }
+                }
+                acc
+            },
+        );
+    collisions
+}
+
 /// Detects collisions and runs handlers as appropriate
 pub struct CollisionSystem<'a> {
     wall_map: SpatialMap,
@@ -135,86 +248,17 @@ impl<'a> CollisionSystem<'a> {
     /// Check collisions and run appropriate handlers
     pub fn process(
         &mut self,
-        walls: &GeomRefMap,
-        baddies: &GeomRefMap,
-        bullets: &GeomRefMap,
-        cannons: &GeomRefMap,
+        wall_geoms: &GeomRefMap,
+        baddie_geoms: &GeomRefMap,
+        bullet_geoms: &GeomRefMap,
+        cannon_geoms: &GeomRefMap,
     ) {
-        let bin_count = calc_bin_count();
-
-        let mut collisions_init = Collisions::new();
-        collisions_init.insert(CollisionKind::BaddieWall, CollisionPairs::new());
-        collisions_init.insert(CollisionKind::BulletBaddie, CollisionPairs::new());
-        collisions_init.insert(CollisionKind::BulletWall, CollisionPairs::new());
-        collisions_init.insert(CollisionKind::BaddieCannon, CollisionPairs::new());
-        
-        let collisions = (0..bin_count).fold(collisions_init, |mut collisions_acc, i| {
-            if let Some(wall_ids) = self.wall_map.get(&i) {
-                if let Some(baddie_ids) = self.baddie_map.get(&i) {
-                    for wall_id in wall_ids {
-                        for baddie_id in baddie_ids {
-                            let wall_geom = walls.get(wall_id).unwrap();
-                            let baddie_geom = baddies.get(baddie_id).unwrap();
-                            if is_collision(*wall_geom, *baddie_geom) {
-                                collisions_acc
-                                    .get_mut(&CollisionKind::BaddieWall)
-                                    .unwrap()
-                                    .insert((*baddie_id, *wall_id));
-                            }
-                        }
-                    }
-                }
-            }
-            // Bullets...
-            if let Some(bullet_ids) = self.bullet_map.get(&i) {
-                for bullet_id in bullet_ids {
-                    // ... vs Walls
-                    if let Some(wall_ids) = self.wall_map.get(&i) {
-                        for wall_id in wall_ids {
-                            let bullet_geom = bullets.get(bullet_id).unwrap();
-                            let wall_geom = walls.get(wall_id).unwrap();
-                            if is_collision(*bullet_geom, *wall_geom) {
-                                collisions_acc
-                                    .get_mut(&CollisionKind::BulletWall)
-                                    .unwrap()
-                                    .insert((*bullet_id, *wall_id));
-                            }
-                        }
-                    }
-                    // ... vs Baddies
-                    if let Some(baddie_ids) = self.baddie_map.get(&i) {
-                        for baddie_id in baddie_ids {
-                            let bullet_geom = bullets.get(bullet_id).unwrap();
-                            let baddie_geom = baddies.get(baddie_id).unwrap();
-                            if is_collision(*bullet_geom, *baddie_geom) {
-                                collisions_acc
-                                    .get_mut(&CollisionKind::BulletBaddie)
-                                    .unwrap()
-                                    .insert((*bullet_id, *baddie_id));
-                            }
-                        }
-                    }
-                }
-            }
-            // Cannons vs baddies
-            if let Some(cannon_ids) = self.cannon_map.get(&i) {
-                for cannon_id in cannon_ids {
-                    if let Some(baddie_ids) = self.baddie_map.get(&i) {
-                        for baddie_id in baddie_ids {
-                            let cannon_geom = cannons.get(cannon_id).unwrap();
-                            let baddie_geom = baddies.get(baddie_id).unwrap();
-                            if is_collision(*cannon_geom, *baddie_geom) {
-                                collisions_acc
-                                    .get_mut(&CollisionKind::BaddieCannon)
-                                    .unwrap()
-                                    .insert((*cannon_id, *baddie_id));
-                            }
-                        }
-                    }
-                }
-            }
-            collisions_acc
-        });
+        let collisions = detect_collisions(
+            (&self.wall_map, wall_geoms),
+            (&self.baddie_map, baddie_geoms),
+            (&self.bullet_map, bullet_geoms),
+            (&self.cannon_map, cannon_geoms),
+        );
 
         // Can't parallelize this because the closures close over mutable data.
         for (collision_kind, collision_pairs) in collisions {
