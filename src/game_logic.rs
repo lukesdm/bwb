@@ -18,7 +18,8 @@ use crate::geometry::{direction_vector, Direction, P};
 use crate::shape::Shape;
 use crate::world;
 use crate::world::{
-    update_geometry, Entities, GameObjects, Geometries, Shapes, World, GRID_HEIGHT, GRID_WIDTH,
+    update_geometry, Entities, GameObjects, Geometries, Healths, Shapes, World, GRID_HEIGHT,
+    GRID_WIDTH,
 };
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
@@ -127,10 +128,12 @@ fn detect_and_handle_collisions(
     entities: &Entities,
     shapes: &mut Shapes,
     geometries: &Geometries,
+    healths: &mut Healths,
 ) -> HashSet<EntityId> {
     // Removal collections. Need a separate one for each closure, but they can be merged at the end.
     let mut to_remove = HashSet::<EntityId>::new();
     let mut to_remove_2 = HashSet::<EntityId>::new();
+    let mut to_remove_3 = HashSet::<EntityId>::new();
     {
         let baddie_wall_handler = |baddie_id: EntityId, _wall_id: EntityId| {
             let baddie_shape = shapes.get_mut(&baddie_id).unwrap();
@@ -148,7 +151,10 @@ fn detect_and_handle_collisions(
         };
 
         let cannon_baddie_handler = |cannon_id: EntityId, baddie_id: EntityId| {
-            // TODO: Implement
+            to_remove_3.insert(baddie_id);
+            let cannon_health = healths.get_mut(&cannon_id).unwrap();
+            let new_health = *cannon_health - 1;
+            *cannon_health = new_health;
         };
 
         let (wall_geoms, baddie_geoms, bullet_geoms, cannon_geoms) =
@@ -167,6 +173,9 @@ fn detect_and_handle_collisions(
     }
     // Union the removal lists
     for tr in to_remove_2 {
+        to_remove.insert(tr);
+    }
+    for tr in to_remove_3 {
         to_remove.insert(tr);
     }
 
@@ -211,8 +220,8 @@ pub fn update_world(mut world: World, dt: i32) -> (World, LevelState) {
 
     handle_bullet_misses(&mut world);
     // Detect & handle collisions
-    let (entities, mut shapes, geometries, healths) = world;
-    let to_remove = detect_and_handle_collisions(&entities, &mut shapes, &geometries);
+    let (entities, mut shapes, geometries, mut healths) = world;
+    let to_remove = detect_and_handle_collisions(&entities, &mut shapes, &geometries, &mut healths);
     world = (entities, shapes, geometries, healths);
     for e in to_remove {
         world::remove(&mut world, e);
@@ -413,4 +422,5 @@ mod tests {
         // Assert
         assert_eq!(health_after - health_before, expected_health_change);
     }
+    // TODO: Game Over when Cannon gets to zero health
 }
