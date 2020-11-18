@@ -202,9 +202,11 @@ fn update_geometries(shapes: &Shapes, geometries: &mut Geometries) {
     }
 }
 
+#[derive(Debug)]
 pub enum LevelState {
     InProgress,
     Complete,
+    GameOver,
 }
 
 pub fn update_world(mut world: World, dt: i32) -> (World, LevelState) {
@@ -252,7 +254,7 @@ fn level_complete(world: &World) -> bool {
 /// Game logic tests. Note: These are integration tests, rather than unit tests.
 #[cfg(test)]
 mod tests {
-    use super::{update_world, GRID_WIDTH};
+    use super::{update_world, LevelState, GRID_WIDTH};
     use crate::entity::Entity;
     use crate::world;
     #[test]
@@ -422,5 +424,22 @@ mod tests {
         // Assert
         assert_eq!(health_after - health_before, expected_health_change);
     }
-    // TODO: Game Over when Cannon gets to zero health
+    #[test]
+    fn gameover_at_zero_health() {
+        // Arrange - trigger collision which results in players health to go to 0.
+        let obj_factory = world::ObjectFactory::new(1000);
+        let cannon = obj_factory.make_cannon((1000, 1000));
+        let (entity, shape, geometry, _) = cannon;
+        let cannon = (entity, shape, geometry, Some(1));
+        let baddie = obj_factory.make_baddie((1000, 1000), (0, 0), 0.0);
+        let world = world::create_world(vec![cannon, baddie]);
+
+        let (_, level_state) = update_world(world, 10);
+
+        let gameover = match level_state {
+            LevelState::GameOver => true,
+            _ => false,
+        };
+        assert!(gameover);
+    }
 }
