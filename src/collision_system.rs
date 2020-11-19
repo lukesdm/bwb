@@ -31,7 +31,7 @@ type SpatialMap = HashMap<i32, HashSet<EntityId>>;
 type SpatialIndex = HashMap<EntityId, Bins>;
 
 fn calc_bin_count(grid_bin_size: i32) -> i32 {
-    (GRID_WIDTH as i32 / grid_bin_size) * (GRID_HEIGHT as i32 / grid_bin_size)
+    ((GRID_WIDTH as i32 / grid_bin_size) + 1) * ((GRID_HEIGHT as i32 / grid_bin_size) + 1)
 }
 
 fn calc_bin(vertex: &Vertex, grid_bin_size: i32) -> i32 {
@@ -188,14 +188,17 @@ fn detect_collisions(
     collisions
 }
 
-/// Calculates grid bin size by taking the biggest object's box side length (assumes uniform size by kind)
+/// Calculates grid bin size by taking the biggest object's horiz/vert span (assumes uniform size by kind)
+/// According to radius circumscribed by rotation
+/// Down to a minimum size (to avoid diminishing perf)
 fn calc_bin_size(
     walls: &GeomRefMap,
     baddies: &GeomRefMap,
     bullets: &GeomRefMap,
     cannons: &GeomRefMap,
 ) -> i32 {
-    (walls
+    let default = 250;
+    let x = (walls
         .iter()
         .take(1)
         .chain(baddies.iter().take(1))
@@ -203,8 +206,10 @@ fn calc_bin_size(
         .chain(cannons.iter().take(1))
         .map(|(_, geom)| box_side_len_sqr(&geom))
         .max()
-        .unwrap_or(1000) as f32)
-        .sqrt() as i32
+        .unwrap_or(default) as f32)
+        .sqrt();
+    let res = (x * std::f32::consts::SQRT_2) as i32;
+    std::cmp::max(res, default)
     // Uses a small optimization there - compares squares and only computes a single sqrt at the end
 }
 
@@ -441,7 +446,7 @@ mod tests {
 
     #[test]
     fn calc_bin_count() {
-        let bin_count_expected = 100;
+        let bin_count_expected = 121;
         let bin_count_actual = super::calc_bin_count(1000);
         assert_eq!(bin_count_actual, bin_count_expected);
     }
