@@ -1,7 +1,7 @@
 //! # Bullets, Walls and Baddies v1  
-
 extern crate sdl2;
 extern crate rayon;
+extern crate itertools;
 
 mod collision_system;
 mod engine;
@@ -15,5 +15,7 @@ mod shape;
 mod world;
 
 pub fn main() {
-    engine::run(99);
+    // single threaded for debugging
+    //rayon::ThreadPoolBuilder::new().num_threads(1).build_global().unwrap();
+    engine::run(3);
 }

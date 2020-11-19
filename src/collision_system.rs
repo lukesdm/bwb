@@ -1,13 +1,10 @@
 use crate::entity::EntityId;
-use crate::geometry::{is_collision, Geometry, Vertex};
+use crate::geometry::{box_side_len_sqr, is_collision, Geometry, Vertex};
 use crate::world::{GeomRefMap, GRID_HEIGHT, GRID_WIDTH};
+use itertools::Itertools;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
-
-/// Bin size for spatial hashmap (square grid).
-/// 10000 / 1000 => 10 * 10 grid
-const GRID_BIN_SIZE: i32 = 1000;
 
 /// Represents the different pairs of entity-kinds' collisions we're interested in observing
 #[derive(PartialEq, Hash, Eq)]
@@ -33,36 +30,36 @@ type Bins = HashSet<i32>;
 type SpatialMap = HashMap<i32, HashSet<EntityId>>;
 type SpatialIndex = HashMap<EntityId, Bins>;
 
-fn calc_bin_count() -> i32 {
-    (GRID_WIDTH as i32 / GRID_BIN_SIZE) * (GRID_HEIGHT as i32 / GRID_BIN_SIZE)
+fn calc_bin_count(grid_bin_size: i32) -> i32 {
+    (GRID_WIDTH as i32 / grid_bin_size) * (GRID_HEIGHT as i32 / grid_bin_size)
 }
 
-fn calc_bin(vertex: &Vertex) -> i32 {
+fn calc_bin(vertex: &Vertex, grid_bin_size: i32) -> i32 {
     // Assume grid is square, or this calc won't work
     assert!(GRID_WIDTH == GRID_HEIGHT);
     let (vx, vy) = vertex;
-    let bx = vx / GRID_BIN_SIZE;
-    let by = vy / GRID_BIN_SIZE;
-    bx + by * GRID_WIDTH as i32 / GRID_BIN_SIZE
+    let bx = vx / grid_bin_size;
+    let by = vy / grid_bin_size;
+    bx + by * GRID_WIDTH as i32 / grid_bin_size
 }
 
 /// Spatial hash. Calculates the indices of a regular grid that the given geometry occupies.
 /// Important - this implementation only works if shape size < bin size.
-fn grid_hash(vertices: &Geometry) -> Bins {
+fn grid_hash(vertices: &Geometry, grid_bin_size: i32) -> Bins {
     let mut bins = Bins::new();
     for v in vertices {
-        bins.insert(calc_bin(v));
+        bins.insert(calc_bin(v, grid_bin_size));
     }
     bins
 }
 
 /// Build map of bin -> object list, and associated index
-fn build_map(geometries: &GeomRefMap) -> (SpatialMap, SpatialIndex) {
+fn build_map(geometries: &GeomRefMap, grid_bin_size: i32) -> (SpatialMap, SpatialIndex) {
     let mut object_map = SpatialMap::new();
     let mut object_index = SpatialIndex::new();
     for geometry in geometries {
         let (id, vertices) = geometry;
-        let grid_bins = grid_hash(vertices);
+        let grid_bins = grid_hash(vertices, grid_bin_size);
         for bin in grid_bins.iter() {
             object_map
                 .entry(*bin)
@@ -80,17 +77,52 @@ fn build_map(geometries: &GeomRefMap) -> (SpatialMap, SpatialIndex) {
     (object_map, object_index)
 }
 
+// const empty_set: &HashSet::<EntityId> = &HashSet::<EntityId>::default();
+// fn empty() -> &'static HashSet<EntityId> {
+//     &empty_set
+// }
+
+// Accumulate collision pairs
+fn add_collisions(
+    collisions_acc: &mut Collisions,
+    kind: &CollisionKind,
+    left: &(&SpatialMap, &GeomRefMap),
+    right: &(&SpatialMap, &GeomRefMap),
+    bin: &i32,
+) {
+    // TODO: can extract these?
+    let empty_set = &HashSet::<EntityId>::default();
+    let empty = || Some(empty_set);
+    let (left_map, left_geoms) = left;
+    let (right_map, right_geoms) = right;
+    let left_ids = left_map.get(bin).or_else(empty).unwrap();
+    let right_ids = right_map.get(bin).or_else(empty).unwrap();
+    let collision_pairs =
+        left_ids
+            .iter()
+            .cartesian_product(right_ids)
+            .filter(|(left_id, right_id)| {
+                let left_geom = left_geoms.get(*left_id).unwrap();
+                let right_geom = right_geoms.get(*right_id).unwrap();
+                is_collision(*left_geom, *right_geom)
+            });
+
+    for (left_id, right_id) in collision_pairs {
+        collisions_acc
+            .get_mut(kind)
+            .unwrap()
+            .insert((*left_id, *right_id));
+    }
+}
+
 fn detect_collisions(
     walls: (&SpatialMap, &GeomRefMap),
     baddies: (&SpatialMap, &GeomRefMap),
     bullets: (&SpatialMap, &GeomRefMap),
-    cannons: (&SpatialMap, &GeomRefMap), 
+    cannons: (&SpatialMap, &GeomRefMap),
+    grid_bin_size: i32,
 ) -> Collisions {
-    let (wall_map, wall_geoms) = walls;
-    let (baddie_map, baddie_geoms) = baddies;
-    let (bullet_map, bullet_geoms) = bullets;
-    let (cannon_map, cannon_geoms) = cannons;
-    let bin_count = calc_bin_count();
+    let bin_count = calc_bin_count(grid_bin_size);
     let init = || {
         let mut collisions_init = Collisions::new();
         collisions_init.insert(CollisionKind::BaddieWall, CollisionPairs::new());
@@ -102,71 +134,35 @@ fn detect_collisions(
 
     let collisions = (0..bin_count)
         .into_par_iter()
-        .fold(init, |mut collisions_acc, i| {
-            if let Some(wall_ids) = wall_map.get(&i) {
-                if let Some(baddie_ids) = baddie_map.get(&i) {
-                    for wall_id in wall_ids {
-                        for baddie_id in baddie_ids {
-                            let wall_geom = wall_geoms.get(wall_id).unwrap();
-                            let baddie_geom = baddie_geoms.get(baddie_id).unwrap();
-                            if is_collision(*wall_geom, *baddie_geom) {
-                                collisions_acc
-                                    .get_mut(&CollisionKind::BaddieWall)
-                                    .unwrap()
-                                    .insert((*baddie_id, *wall_id));
-                            }
-                        }
-                    }
-                }
-            }
-            // Bullets...
-            if let Some(bullet_ids) = bullet_map.get(&i) {
-                for bullet_id in bullet_ids {
-                    // ... vs Walls
-                    if let Some(wall_ids) = wall_map.get(&i) {
-                        for wall_id in wall_ids {
-                            let bullet_geom = bullet_geoms.get(bullet_id).unwrap();
-                            let wall_geom = wall_geoms.get(wall_id).unwrap();
-                            if is_collision(*bullet_geom, *wall_geom) {
-                                collisions_acc
-                                    .get_mut(&CollisionKind::BulletWall)
-                                    .unwrap()
-                                    .insert((*bullet_id, *wall_id));
-                            }
-                        }
-                    }
-                    // ... vs Baddies
-                    if let Some(baddie_ids) = baddie_map.get(&i) {
-                        for baddie_id in baddie_ids {
-                            let bullet_geom = bullet_geoms.get(bullet_id).unwrap();
-                            let baddie_geom = baddie_geoms.get(baddie_id).unwrap();
-                            if is_collision(*bullet_geom, *baddie_geom) {
-                                collisions_acc
-                                    .get_mut(&CollisionKind::BulletBaddie)
-                                    .unwrap()
-                                    .insert((*bullet_id, *baddie_id));
-                            }
-                        }
-                    }
-                }
-            }
-            // Cannons vs baddies
-            if let Some(cannon_ids) = cannon_map.get(&i) {
-                for cannon_id in cannon_ids {
-                    if let Some(baddie_ids) = baddie_map.get(&i) {
-                        for baddie_id in baddie_ids {
-                            let cannon_geom = cannon_geoms.get(cannon_id).unwrap();
-                            let baddie_geom = baddie_geoms.get(baddie_id).unwrap();
-                            if is_collision(*cannon_geom, *baddie_geom) {
-                                collisions_acc
-                                    .get_mut(&CollisionKind::BaddieCannon)
-                                    .unwrap()
-                                    .insert((*cannon_id, *baddie_id));
-                            }
-                        }
-                    }
-                }
-            }
+        .fold(init, |mut collisions_acc, bin| {
+            add_collisions(
+                &mut collisions_acc,
+                &CollisionKind::BaddieWall,
+                &baddies,
+                &walls,
+                &bin,
+            );
+            add_collisions(
+                &mut collisions_acc,
+                &CollisionKind::BulletWall,
+                &bullets,
+                &walls,
+                &bin,
+            );
+            add_collisions(
+                &mut collisions_acc,
+                &CollisionKind::BulletBaddie,
+                &bullets,
+                &baddies,
+                &bin,
+            );
+            add_collisions(
+                &mut collisions_acc,
+                &CollisionKind::BaddieCannon,
+                &baddies,
+                &cannons,
+                &bin,
+            );
             collisions_acc
         })
         // Stitch together sub-collections
@@ -192,6 +188,26 @@ fn detect_collisions(
     collisions
 }
 
+/// Calculates grid bin size by taking the biggest object's box side length (assumes uniform size by kind)
+fn calc_bin_size(
+    walls: &GeomRefMap,
+    baddies: &GeomRefMap,
+    bullets: &GeomRefMap,
+    cannons: &GeomRefMap,
+) -> i32 {
+    (walls
+        .iter()
+        .take(1)
+        .chain(baddies.iter().take(1))
+        .chain(bullets.iter().take(1))
+        .chain(cannons.iter().take(1))
+        .map(|(_, geom)| box_side_len_sqr(&geom))
+        .max()
+        .unwrap_or(1000) as f32)
+        .sqrt() as i32
+    // Uses a small optimization there - compares squares and only computes a single sqrt at the end
+}
+
 /// Detects collisions and runs handlers as appropriate
 pub struct CollisionSystem<'a> {
     wall_map: SpatialMap,
@@ -207,6 +223,9 @@ pub struct CollisionSystem<'a> {
     #[allow(unused)]
     cannon_index: SpatialIndex,
     handlers: CollisionHandlers<'a>,
+    /// Bin size for spatial hashmap (square grid).
+    /// 10000 / 1000 => 10 * 10 grid
+    grid_bin_size: i32,
 }
 
 impl<'a> CollisionSystem<'a> {
@@ -221,10 +240,11 @@ impl<'a> CollisionSystem<'a> {
         baddie_cannon_handler: CollisionHandler<'a>,
     ) -> Self {
         // build hashmaps from object geometries
-        let (wall_map, wall_index) = build_map(walls);
-        let (baddie_map, baddie_index) = build_map(baddies);
-        let (bullet_map, bullet_index) = build_map(bullets);
-        let (cannon_map, cannon_index) = build_map(cannons);
+        let grid_bin_size = calc_bin_size(walls, baddies, bullets, cannons);
+        let (wall_map, wall_index) = build_map(walls, grid_bin_size);
+        let (baddie_map, baddie_index) = build_map(baddies, grid_bin_size);
+        let (bullet_map, bullet_index) = build_map(bullets, grid_bin_size);
+        let (cannon_map, cannon_index) = build_map(cannons, grid_bin_size);
 
         let mut handlers = CollisionHandlers::new();
         handlers.insert(CollisionKind::BaddieWall, baddie_wall_handler);
@@ -242,6 +262,7 @@ impl<'a> CollisionSystem<'a> {
             cannon_map,
             cannon_index,
             handlers,
+            grid_bin_size,
         }
     }
 
@@ -258,6 +279,7 @@ impl<'a> CollisionSystem<'a> {
             (&self.baddie_map, baddie_geoms),
             (&self.bullet_map, bullet_geoms),
             (&self.cannon_map, cannon_geoms),
+            self.grid_bin_size,
         );
 
         // Can't parallelize this because the closures close over mutable data.
@@ -284,7 +306,7 @@ mod tests {
     fn grid_hash_single() {
         let vertex = (1000, 2000);
         let expected = Bins::from_iter([21].iter().cloned());
-        let actual = grid_hash(&[vertex, vertex, vertex, vertex, vertex]);
+        let actual = grid_hash(&[vertex, vertex, vertex, vertex, vertex], 1000);
 
         assert_eq!(expected, actual);
     }
@@ -300,7 +322,7 @@ mod tests {
             (1000, 2000), // bin 21
         ];
         let expected = Bins::from_iter([20, 21].iter().cloned());
-        let actual = grid_hash(&vertices);
+        let actual = grid_hash(&vertices, 1000);
 
         assert_eq!(expected, actual);
     }
@@ -321,7 +343,7 @@ mod tests {
                 .collect();
         let expected = HashSet::from_iter([wall1.get_id(), wall2.get_id()].iter().cloned());
         // Act
-        let (wall_map, wall_index) = build_map(&walls_geoms);
+        let (wall_map, wall_index) = build_map(&walls_geoms, 1000);
 
         // Assert - map
         assert_eq!(wall_map.get(&11).unwrap(), &expected);
@@ -420,7 +442,7 @@ mod tests {
     #[test]
     fn calc_bin_count() {
         let bin_count_expected = 100;
-        let bin_count_actual = super::calc_bin_count();
+        let bin_count_actual = super::calc_bin_count(1000);
         assert_eq!(bin_count_actual, bin_count_expected);
     }
 }
