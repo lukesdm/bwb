@@ -10,6 +10,11 @@ use crate::render::Renderer;
 
 const MAX_FPS: u32 = 60; // Max FPS. Set this low to observe effects.
 
+fn print_framerate(frame_time: i32) {
+    let frame_rate = 1.0 / (frame_time as f32 / 1000.0);
+    println!("{}", frame_rate);
+}
+
 pub fn run(mut curr_level: i32) {
     let (mut world, mut obj_factory) = levels::init(curr_level);
     let sdl_context = sdl2::init().unwrap();
@@ -85,6 +90,10 @@ pub fn run(mut curr_level: i32) {
                     keycode: Some(Keycode::Down),
                     ..
                 } => move_cannon(&mut world, Direction::Down),
+                Event::KeyDown {
+                    keycode: Some(Keycode::F),
+                    ..
+                } => print_framerate(frame_time),
                 Event::Quit { .. }
                 | Event::KeyDown {
                     keycode: Some(Keycode::Escape),
