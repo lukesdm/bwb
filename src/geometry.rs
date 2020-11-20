@@ -151,7 +151,14 @@ pub fn direction_vector(direction: Direction) -> Vector {
     }
 }
 
-
+/// Calculates the square of a box's side length. Assumes square box.
+pub fn box_side_len_sqr(geom: &Geometry) -> i32 {
+    let (x0, y0) = geom[0];
+    let (x1, y1) = geom[1];
+    let dx = x1 - x0;
+    let dy = y1 - y0;
+    dx * dx + dy * dy
+}
 
 #[cfg(test)]
 mod tests {

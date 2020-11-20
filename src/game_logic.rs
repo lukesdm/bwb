@@ -150,7 +150,7 @@ fn detect_and_handle_collisions(
             to_remove_2.insert(baddie_id);
         };
 
-        let cannon_baddie_handler = |cannon_id: EntityId, baddie_id: EntityId| {
+        let baddie_cannon_handler = |baddie_id: EntityId, cannon_id: EntityId| {
             to_remove_3.insert(baddie_id);
             let cannon_health = healths.get_mut(&cannon_id).unwrap();
             let new_health = *cannon_health - 1;
@@ -167,7 +167,7 @@ fn detect_and_handle_collisions(
             Box::new(baddie_wall_handler),
             Box::new(bullet_wall_handler),
             Box::new(bullet_baddie_handler),
-            Box::new(cannon_baddie_handler),
+            Box::new(baddie_cannon_handler),
         );
         collision_system.process(&wall_geoms, &baddie_geoms, &bullet_geoms, &cannon_geoms);
     }

@@ -10,6 +10,7 @@ edition = "2018"
 sdl2 = "0.34.3"
 rand = "0.4.2"
 rayon = "1.5.0"
+itertools = "0.9.0"
 
 [profile.release]
 debug = true
