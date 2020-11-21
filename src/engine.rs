@@ -7,17 +7,35 @@ use crate::game_logic::{move_cannon, try_fire, update_world, LevelState};
 use crate::geometry::Direction;
 use crate::levels;
 use crate::render::Renderer;
+use crate::text;
 
 const MAX_FPS: u32 = 60; // Max FPS. Set this low to observe effects.
 
-// enum GameState {
-//     TitleScreen,
-//     Playing,
-//     GameOver,
-// }
-
-fn title_screen(renderer: &Renderer, event_pump: &sdl2::EventPump) {
-    // TODO: title screen logic
+fn title_screen(renderer: &mut Renderer, event_pump: &mut sdl2::EventPump) {
+    'running: loop {
+        renderer.draw_text_n(&vec![
+            ("bwb", text::Size::Large),
+            ("Baddies, Walls & Bullets", text::Size::Medium),
+            ("Press any key to begin...", text::Size::Small),
+            ], text::Position::CenterScreen);
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } // TODO: Proper quit handling here
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => break 'running,
+                Event::KeyDown {
+                    keycode: Some(_),
+                    ..
+                } => break 'running,
+                _ => {}
+            }
+        }
+        renderer.present();
+        let frame_time = Duration::new(0, 1_000_000_000u32 / MAX_FPS);
+        ::std::thread::sleep(frame_time);
+    }
 }
 
 fn print_framerate(frame_time: i32) {
@@ -25,9 +43,8 @@ fn print_framerate(frame_time: i32) {
     println!("{}", frame_rate);
 }
 
-fn play_level(renderer: &mut Renderer, event_pump: &mut sdl2::EventPump, mut curr_level: i32)  {
+fn play_level(renderer: &mut Renderer, event_pump: &mut sdl2::EventPump, mut curr_level: i32) {
     let (mut world, mut obj_factory) = levels::init(curr_level);
-    
     let mut current_time = Instant::now();
     // Previous fire time - set such that the player can take their first shot from the start of the game.
     let mut prev_fire_time = current_time - Duration::from_secs(10);
@@ -119,12 +136,12 @@ fn play_level(renderer: &mut Renderer, event_pump: &mut sdl2::EventPump, mut cur
 }
 
 pub fn run(starting_level: i32) {
-    
     let sdl_context = sdl2::init().unwrap();
-    let mut renderer = Renderer::new(&sdl_context);
+    let ttf_context = sdl2::ttf::init().unwrap();
+    let mut renderer = Renderer::new(&sdl_context, text::load_font(&ttf_context));
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    title_screen(&renderer, &event_pump);
+    title_screen(&mut renderer, &mut event_pump);
 
     play_level(&mut renderer, &mut event_pump, starting_level);
 }

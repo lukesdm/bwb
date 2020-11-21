@@ -12,6 +12,7 @@ mod helpers;
 mod levels;
 mod render;
 mod shape;
+mod text;
 mod world;
 
 pub fn main() {
