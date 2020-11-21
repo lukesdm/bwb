@@ -14,6 +14,10 @@ const MAX_FPS: u32 = 60; // Max FPS. Set this low to observe effects.
 
 type LevelId = i32;
 
+/// A kludge to allow SRP event handling. EventPump.poll_iter consumes some events that aren't relevant at the time.
+/// These can then be requeued using EventSubsystem.push_event, to be handled by the more appropriate handler later.
+type EventSys = (sdl2::EventPump, sdl2::EventSubsystem);
+
 enum GameState {
     ShowingTitleScreen,
     StartingLevel(LevelId),
@@ -28,7 +32,7 @@ enum GameState {
     Quitting,    // TODO: handling
 }
 
-fn title_screen(renderer: &mut Renderer, event_pump: &mut sdl2::EventPump) -> GameState {
+fn title_screen(renderer: &mut Renderer, event_sys: &mut EventSys) -> GameState {
     renderer.draw_text_n(
         &vec![
             ("bwb", text::Size::Large),
@@ -38,14 +42,16 @@ fn title_screen(renderer: &mut Renderer, event_pump: &mut sdl2::EventPump) -> Ga
         text::Position::CenterScreen,
     );
 
-    for event in event_pump.poll_iter() {
+    //for event in event_pump.peek_e
+
+    for event in event_sys.0.poll_iter() {
         match event {
             Event::KeyDown {
                 keycode: Some(_), ..
             } => return GameState::StartingLevel(1),
             _ => {
                 // re-queue event for subsequent handlers  TODO: UNCOMMENT + FIX
-                //event_pump.push(event);
+                event_sys.1.push_event(event).unwrap();
                 break;
             }
         }
@@ -70,7 +76,7 @@ fn init_level(curr_level: i32) -> GameState {
 
 fn play_level(
     renderer: &mut Renderer,
-    event_pump: &mut sdl2::EventPump,
+    event_sys: &mut EventSys,
     frame_time: i32,
     current_time: Instant,
     mut world: world::World,
@@ -89,7 +95,7 @@ fn play_level(
 
     renderer.render(&world.0, &world.2, &world.3);
 
-    for event in event_pump.poll_iter() {
+    for event in event_sys.0.poll_iter() {
         match event {
             Event::KeyDown {
                 keycode: Some(Keycode::Left),
@@ -124,8 +130,8 @@ fn play_level(
                 ..
             } => move_cannon(&mut world, Direction::Down),
             _ => {
-                // re-queue event for subsequent handlers TODO: UNCOMMENT + FIX
-                //event_pump.push(event);
+                // re-queue event for subsequent handlers
+                event_sys.1.push_event(event).unwrap();
                 break;
             }
         }
@@ -138,7 +144,11 @@ pub fn run() {
     let sdl_context = sdl2::init().unwrap();
     let ttf_context = sdl2::ttf::init().unwrap();
     let mut renderer = Renderer::new(&sdl_context, text::load_font(&ttf_context));
-    let mut event_pump = sdl_context.event_pump().unwrap();
+    let mut event_sys: EventSys = (
+        sdl_context.event_pump().unwrap(),
+        sdl_context.event().unwrap(),
+    );
+
     let mut game_state = GameState::ShowingTitleScreen;
     let mut current_time = Instant::now();
 
@@ -150,11 +160,11 @@ pub fn run() {
         // level state: world IN+OUT, last_fire_time IN+OUT (<-- should be world data attached to cannon), status OUT (e.g. player died)
         // level_init state: curr_level, returns world
         game_state = match game_state {
-            GameState::ShowingTitleScreen => title_screen(&mut renderer, &mut event_pump),
+            GameState::ShowingTitleScreen => title_screen(&mut renderer, &mut event_sys),
             GameState::StartingLevel(curr_level) => init_level(curr_level),
             GameState::PlayingLevel(world, obj_factory, prev_fire_time, curr_level) => play_level(
                 &mut renderer,
-                &mut event_pump,
+                &mut event_sys,
                 frame_time,
                 current_time,
                 world,
@@ -167,7 +177,7 @@ pub fn run() {
             GameState::Quitting => break 'running,
         };
 
-        for event in event_pump.poll_iter() {
+        for event in event_sys.0.poll_iter() {
             match event {
                 Event::KeyDown {
                     keycode: Some(Keycode::F),
