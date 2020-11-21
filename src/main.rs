@@ -18,5 +18,5 @@ mod world;
 pub fn main() {
     // single threaded for debugging
     //rayon::ThreadPoolBuilder::new().num_threads(1).build_global().unwrap();
-    engine::run(3);
+    engine::run();
 }
