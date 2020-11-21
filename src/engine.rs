@@ -10,17 +10,24 @@ use crate::render::Renderer;
 
 const MAX_FPS: u32 = 60; // Max FPS. Set this low to observe effects.
 
+// enum GameState {
+//     TitleScreen,
+//     Playing,
+//     GameOver,
+// }
+
+fn title_screen(renderer: &Renderer, event_pump: &sdl2::EventPump) {
+    // TODO: title screen logic
+}
+
 fn print_framerate(frame_time: i32) {
     let frame_rate = 1.0 / (frame_time as f32 / 1000.0);
     println!("{}", frame_rate);
 }
 
-pub fn run(mut curr_level: i32) {
+fn play_level(renderer: &mut Renderer, event_pump: &mut sdl2::EventPump, mut curr_level: i32)  {
     let (mut world, mut obj_factory) = levels::init(curr_level);
-    let sdl_context = sdl2::init().unwrap();
-    let mut renderer = Renderer::new(&sdl_context);
-    let mut event_pump = sdl_context.event_pump().unwrap();
-
+    
     let mut current_time = Instant::now();
     // Previous fire time - set such that the player can take their first shot from the start of the game.
     let mut prev_fire_time = current_time - Duration::from_secs(10);
@@ -49,6 +56,7 @@ pub fn run(mut curr_level: i32) {
             _ => false,
         };
         if level_complete {
+            // TODO: break to show level complete screen
             curr_level += 1;
             let (world_temp, obj_factory_temp) = levels::init(curr_level);
             world = world_temp;
@@ -108,4 +116,15 @@ pub fn run(mut curr_level: i32) {
         let frame_time = Duration::new(0, 1_000_000_000u32 / MAX_FPS);
         ::std::thread::sleep(frame_time);
     }
+}
+
+pub fn run(starting_level: i32) {
+    
+    let sdl_context = sdl2::init().unwrap();
+    let mut renderer = Renderer::new(&sdl_context);
+    let mut event_pump = sdl_context.event_pump().unwrap();
+
+    title_screen(&renderer, &event_pump);
+
+    play_level(&mut renderer, &mut event_pump, starting_level);
 }
