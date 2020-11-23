@@ -75,16 +75,13 @@ fn v_center(height: u32) -> i32 {
     WIN_HEIGHT as i32 / 2 - height as i32 / 2
 }
 
-// TODO: Check - can we get rid of the 'a from here now?
-pub struct Renderer<'a> {
+pub struct Renderer<'ttf_context> {
     canvas: Canvas,
-    //ttf_context: sdl2::ttf::Sdl2TtfContext,
-    font: Font<'a>,
+    font: Font<'ttf_context>,
 }
 
-impl<'a> Renderer<'a> {
-    //pub fn new(sdl_context: &sdl2::Sdl, ttf_context: sdl2::ttf::Sdl2TtfContext) -> Renderer<'a> {
-    pub fn new(sdl_context: &sdl2::Sdl, font: Font<'a>) -> Renderer<'a> {
+impl<'ttf_context> Renderer<'ttf_context> {
+    pub fn new(sdl_context: &sdl2::Sdl, font: Font<'ttf_context>) -> Renderer<'ttf_context> {
         let video_subsystem = sdl_context.video().unwrap();
         let window = video_subsystem
             .window("Bullets, Walls and Baddies", WIN_WIDTH, WIN_HEIGHT)
@@ -94,7 +91,6 @@ impl<'a> Renderer<'a> {
 
         Renderer {
             canvas: window.into_canvas().build().unwrap(),
-            //ttf_context,
             font,
         }
     }
