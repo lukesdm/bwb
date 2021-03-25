@@ -84,7 +84,7 @@ impl<'ttf_context> Renderer<'ttf_context> {
     pub fn new(sdl_context: &sdl2::Sdl, font: Font<'ttf_context>) -> Renderer<'ttf_context> {
         let video_subsystem = sdl_context.video().unwrap();
         let window = video_subsystem
-            .window("Bullets, Walls and Baddies", WIN_WIDTH, WIN_HEIGHT)
+            .window("Baddies, Walls and Bullets", WIN_WIDTH, WIN_HEIGHT)
             .position_centered()
             .build()
             .unwrap();
@@ -125,9 +125,10 @@ impl<'ttf_context> Renderer<'ttf_context> {
         self.canvas.present();
     }
 
-    pub fn draw_text_n(&mut self, lines: &Vec<text::Line>, position: text::Position) {
+    pub fn draw_text_n(&mut self, lines: &Vec<text::Line>, _position: text::Position) {
         // Would be good to extract this, but we can't reference it, as the return type is private.
-        // Also holds references captured by closure as
+        // Also holds references captured by closure.
+        // TODO: handling of position param
         let texture_creator = self.canvas.texture_creator();
         let mut textures: Vec<(sdl2::render::Texture, u32, u32)> = vec![];
         for (text, size) in lines {
